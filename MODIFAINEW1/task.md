@@ -1,34 +1,43 @@
 # ModifAI LangGraph Implementation Tasks
 
 ## Foundation
-- [ ] requirements.txt
-- [ ] config/__init__.py + config/settings.py
-- [ ] graph/__init__.py + graph/state.py
-- [ ] schemas/__init__.py
-- [ ] utils/__init__.py + agents/__init__.py + tests/__init__.py
+- [x] requirements.txt
+- [x] config/__init__.py + config/settings.py
+- [x] graph/__init__.py + graph/state.py
+- [x] schemas/__init__.py
+- [x] utils/__init__.py + agents/__init__.py + tests/__init__.py
 
 ## Utilities
-- [ ] utils/logger.py
-- [ ] utils/node_helpers.py
-- [ ] schemas/state_schema.py
+- [x] utils/logger.py
+- [x] utils/node_helpers.py
+- [x] schemas/state_schema.py
 
-## Agents
-- [ ] agents/validation.py
-- [ ] agents/ocr.py
-- [ ] agents/chunking.py
-- [ ] agents/generation.py
-- [ ] agents/quality.py
-- [ ] agents/finetune.py
-- [ ] agents/evaluation.py
-- [ ] agents/deployment.py
+## Agents (guide-compliant: private helpers + safe error defaults)
+- [x] agents/validation.py
+- [x] agents/ocr.py
+- [x] agents/chunking.py
+- [x] agents/generation.py
+- [x] agents/quality.py
+- [x] agents/finetune.py
+- [x] agents/evaluation.py
+- [x] agents/deployment.py
 
 ## Graph
-- [ ] graph/routers.py
-- [ ] graph/graph_builder.py
+- [x] graph/routers.py
+- [x] graph/graph_builder.py
 
 ## Entry Point & Tests
-- [ ] app.py
-- [ ] tests/test_graph.py
+- [x] app.py
+- [x] tests/test_graph.py            # integration smoke tests
+- [x] tests/test_validation.py       # per-agent unit tests
+- [x] tests/test_ocr.py
+- [x] tests/test_chunking.py
+- [x] tests/test_generation.py
+- [x] tests/test_quality.py
+- [x] tests/test_finetune.py
+- [x] tests/test_evaluation.py
+- [x] tests/test_deployment.py
 
 ## Documentation
-- [ ] README.md (with Mermaid diagram)
+- [x] README.md (with Mermaid diagram)
+- [x] AGENT_DEVELOPMENT_GUIDE.md

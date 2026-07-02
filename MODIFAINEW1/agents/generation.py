@@ -26,6 +26,15 @@ from utils.node_helpers import build_base_update, enter_node, leave_node
 
 logger = get_logger(__name__)
 
+_DEFAULT_DATASET: List[Dict[str, Any]] = [
+    {
+        "id": 0,
+        "question": "[STUB] Default fallback question.",
+        "answer": "[STUB] Default fallback answer.",
+        "dataset_type": "QA",
+    }
+]
+
 
 def generation_agent(state: ModifAIState) -> dict:
     """Generates a synthetic training dataset from text chunks.
@@ -47,43 +56,85 @@ def generation_agent(state: ModifAIState) -> dict:
             f"Generating '{dataset_type}' dataset from {len(chunks)} chunk(s)..."
         )
 
-        # Stub: one QA pair per chunk
-        # Real impl: LangChain | Bedrock chain per chunk, deduplicated
-        dataset: List[Dict[str, Any]] = [
-            {
-                "id": idx,
-                "chunk_source": chunk[:100],
-                "question": (
-                    f"[STUB] What is the primary topic described in chunk {idx + 1}?"
-                ),
-                "answer": (
-                    f"[STUB] Chunk {idx + 1} covers the following synthesised "
-                    "information from the source document."
-                ),
-                "dataset_type": dataset_type,
-            }
-            for idx, chunk in enumerate(chunks)
-        ]
-
-        if not dataset:
-            dataset = [
-                {
-                    "id": 0,
-                    "question": "[STUB] Default fallback question.",
-                    "answer": "[STUB] Default fallback answer.",
-                    "dataset_type": dataset_type,
-                }
-            ]
+        dataset: List[Dict[str, Any]] = _generate_dataset(chunks, dataset_type)
 
         update["generated_dataset"] = dataset
         logger.info(f"  Generated {len(dataset)} training example(s).")
 
     except Exception as exc:
         logger.error(
-            f"Unhandled exception in Dataset Generation Agent: {exc}", exc_info=True
+            f"Unhandled exception in Dataset Generation Agent: {exc}",
+            exc_info=True,
         )
         update["errors"] = [f"GenerationAgent: {exc}"]
         update["generated_dataset"] = []
 
     leave_node("Dataset Generation Agent", update, logger)
     return update
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _generate_qa_pair(
+    idx: int,
+    chunk: str,
+    dataset_type: str,
+) -> Dict[str, Any]:
+    """Generates a single question-answer training pair from one chunk.
+
+    Stub implementation returns a formatted placeholder.  The real
+    implementation will invoke an LLM (e.g. Bedrock Claude) via a LangChain
+    prompt template to produce a semantically meaningful QA pair derived from
+    the chunk's actual content.
+
+    Args:
+        idx: Zero-based index of the chunk within the full chunk list.
+        chunk: The source text chunk to base the training pair on.
+        dataset_type: The dataset format requested by the user (e.g. ``"QA"``).
+
+    Returns:
+        A dict representing one training example with keys:
+        ``id``, ``chunk_source``, ``question``, ``answer``, ``dataset_type``.
+    """
+    # TODO: Replace stub with LangChain | Bedrock chain invocation
+    return {
+        "id": idx,
+        "chunk_source": chunk[:100],
+        "question": (
+            f"[STUB] What is the primary topic described in chunk {idx + 1}?"
+        ),
+        "answer": (
+            f"[STUB] Chunk {idx + 1} covers the following synthesised "
+            "information from the source document."
+        ),
+        "dataset_type": dataset_type,
+    }
+
+
+def _generate_dataset(
+    chunks: List[str],
+    dataset_type: str,
+) -> List[Dict[str, Any]]:
+    """Generates a full training dataset from all text chunks.
+
+    Calls ``_generate_qa_pair`` for each chunk and falls back to
+    ``_DEFAULT_DATASET`` when no chunks are supplied.
+
+    Args:
+        chunks: List of text chunks produced by the Chunking Agent.
+        dataset_type: The dataset format label (e.g. ``"QA"``).
+
+    Returns:
+        A list of training example dicts.  Never empty — returns the default
+        fallback dataset when ``chunks`` is empty.
+    """
+    if not chunks:
+        logger.warning(
+            "chunks list is empty — returning default fallback dataset."
+        )
+        return list(_DEFAULT_DATASET)  # return a copy
+
+    return [_generate_qa_pair(idx, chunk, dataset_type) for idx, chunk in enumerate(chunks)]
