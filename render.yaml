@@ -1,0 +1,16 @@
+# render.yaml — ModifAI Input Validation Module
+# Deploys as a Node.js Web Service on Render.
+# Set the OPENROUTER_API_KEY environment variable in the Render dashboard.
+
+services:
+  - type: web
+    name: modifai-input-validation
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENROUTER_API_KEY
+        sync: false   # Set this manually in the Render dashboard — never commit the key

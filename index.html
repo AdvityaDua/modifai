@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ModifAI — Input Validation</title>
+  <meta name="description" content="ModifAI Input Validation — Intent Classification and Data Quality Gate for AI-powered document pipelines." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Design Tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --bg-base:        #07090f;
+      --bg-surface:     #0d111e;
+      --bg-card:        #121826;
+      --bg-card-hover:  #161e30;
+      --bg-input:       #0b0f1a;
+      --border:         rgba(99,131,255,0.15);
+      --border-glow:    rgba(99,131,255,0.4);
+
+      --primary:        #6383ff;
+      --primary-light:  #8ba4ff;
+      --primary-dark:   #3d5ee0;
+      --accent:         #a78bfa;
+      --accent2:        #34d399;
+      --warn:           #f59e0b;
+      --danger:         #ef4444;
+
+      --text-primary:   #e8eaf6;
+      --text-secondary: #8892b0;
+      --text-muted:     #4a5568;
+
+      --radius-sm:      8px;
+      --radius-md:      14px;
+      --radius-lg:      20px;
+      --radius-xl:      28px;
+
+      --shadow-glow:    0 0 40px rgba(99,131,255,0.12);
+      --shadow-card:    0 4px 32px rgba(0,0,0,0.5);
+
+      --transition:     0.2s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ── Reset & Base ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated Background ───────────────────────────────────────────────── */
+    .bg-orbs {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .bg-orbs::before {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(99,131,255,0.07) 0%, transparent 70%);
+      top: -150px; left: -150px;
+      animation: float1 18s ease-in-out infinite;
+    }
+    .bg-orbs::after {
+      content: '';
+      position: absolute;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(167,139,250,0.06) 0%, transparent 70%);
+      bottom: -100px; right: -100px;
+      animation: float2 22s ease-in-out infinite;
+    }
+    @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(60px,40px)} }
+    @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-50px,-60px)} }
+
+    /* ── Layout ────────────────────────────────────────────────────────────── */
+    .app-wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────────────── */
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(99,131,255,0.1);
+      border: 1px solid var(--border-glow);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary-light);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .header-badge::before {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent2);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%,100%{opacity:1;transform:scale(1)}
+      50%{opacity:0.5;transform:scale(0.8)}
+    }
+    .header h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff 0%, var(--primary-light) 50%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+    .header p {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    /* ── Cards ─────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px 32px;
+      box-shadow: var(--shadow-card);
+      transition: border-color var(--transition), box-shadow var(--transition);
+      margin-bottom: 20px;
+    }
+    .card:hover { border-color: var(--border-glow); box-shadow: var(--shadow-glow); }
+
+    /* ── Section Labels ────────────────────────────────────────────────────── */
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+    .section-label .step-dot {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(99,131,255,0.15);
+      border: 1px solid var(--border-glow);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      color: var(--primary-light);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── Drop Zone ─────────────────────────────────────────────────────────── */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      padding: 48px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      background: var(--bg-input);
+      position: relative;
+      overflow: hidden;
+    }
+    #drop-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 0%, rgba(99,131,255,0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: var(--primary);
+      background: rgba(99,131,255,0.04);
+      box-shadow: 0 0 30px rgba(99,131,255,0.08);
+    }
+    #drop-zone.drag-over { border-style: solid; }
+    #drop-zone.has-file {
+      border-color: var(--accent2);
+      border-style: solid;
+    }
+
+    .drop-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      display: block;
+      filter: drop-shadow(0 0 12px rgba(99,131,255,0.4));
+      transition: transform var(--transition);
+    }
+    #drop-zone:hover .drop-icon { transform: translateY(-4px); }
+    #drop-zone.has-file .drop-icon { filter: drop-shadow(0 0 12px rgba(52,211,153,0.4)); }
+
+    .drop-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .drop-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .file-info {
+      margin-top: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(52,211,153,0.1);
+      border: 1px solid rgba(52,211,153,0.3);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 0.82rem;
+      color: var(--accent2);
+      font-weight: 500;
+    }
+    #file-input { display: none; }
+
+    /* ── Text Inputs ───────────────────────────────────────────────────────── */
+    .input-group { margin-bottom: 16px; }
+    .input-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      letter-spacing: 0.04em;
+    }
+    .input-field {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      color: var(--text-primary);
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
+    }
+    .input-field::placeholder { color: var(--text-muted); }
+    .input-field:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99,131,255,0.15);
+    }
+    .input-field.mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+    }
+    .input-hint {
+      font-size: 0.77rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ── Run Button ────────────────────────────────────────────────────────── */
+    #run-btn {
+      width: 100%;
+      padding: 16px 24px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--transition);
+      box-shadow: 0 4px 20px rgba(99,131,255,0.3);
+      position: relative;
+      overflow: hidden;
+      letter-spacing: 0.02em;
+    }
+    #run-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 100%);
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    #run-btn:hover:not(:disabled)::before { opacity: 1; }
+    #run-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(99,131,255,0.45);
+    }
+    #run-btn:active:not(:disabled) { transform: translateY(0); }
+    #run-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* ── Pipeline Progress ─────────────────────────────────────────────────── */
+    #progress-section { display: none; }
+
+    .progress-bar-wrap {
+      background: rgba(255,255,255,0.04);
+      border-radius: 999px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transition: width 0.4s ease;
+      box-shadow: 0 0 12px rgba(99,131,255,0.5);
+    }
+
+    .pipeline-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pipeline-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.02);
+      border: 1px solid transparent;
+      transition: all var(--transition);
+      opacity: 0.4;
+    }
+    .pipeline-step.active {
+      opacity: 1;
+      border-color: rgba(99,131,255,0.2);
+      background: rgba(99,131,255,0.05);
+    }
+    .pipeline-step.done {
+      opacity: 1;
+      border-color: rgba(52,211,153,0.15);
+      background: rgba(52,211,153,0.03);
+    }
+    .pipeline-step.error-step {
+      opacity: 1;
+      border-color: rgba(239,68,68,0.2);
+      background: rgba(239,68,68,0.04);
+    }
+
+    .step-icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1.5px solid var(--border);
+      background: var(--bg-card);
+      transition: all var(--transition);
+    }
+    .pipeline-step.active .step-icon {
+      border-color: var(--primary);
+      background: rgba(99,131,255,0.15);
+      color: var(--primary-light);
+      animation: spin-ring 1s linear infinite;
+    }
+    @keyframes spin-ring {
+      0%{box-shadow:0 0 0 2px transparent,0 0 0 2px var(--primary) inset}
+      50%{box-shadow:0 0 8px rgba(99,131,255,0.6),0 0 0 2px var(--primary) inset}
+      100%{box-shadow:0 0 0 2px transparent,0 0 0 2px var(--primary) inset}
+    }
+    .pipeline-step.done .step-icon {
+      border-color: var(--accent2);
+      background: rgba(52,211,153,0.15);
+      color: var(--accent2);
+    }
+    .pipeline-step.error-step .step-icon {
+      border-color: var(--danger);
+      background: rgba(239,68,68,0.12);
+      color: var(--danger);
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+    .step-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .pipeline-step.active .step-name { color: var(--primary-light); }
+    .pipeline-step.done .step-name { color: var(--accent2); }
+    .step-message {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .step-detail {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 3px;
+    }
+
+    /* ── Log stream ────────────────────────────────────────────────────────── */
+    .log-stream {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(99,131,255,0.3) transparent;
+    }
+    .log-line {
+      padding: 2px 0;
+      animation: fadein 0.3s ease;
+    }
+    @keyframes fadein { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+    .log-line.active { color: var(--primary-light); }
+    .log-line.done { color: var(--accent2); }
+    .log-line.error { color: var(--danger); }
+
+    /* ── Results Panel ─────────────────────────────────────────────────────── */
+    #results-section { display: none; }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .decision-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .decision-badge.proceed {
+      background: rgba(52,211,153,0.12);
+      border: 1.5px solid rgba(52,211,153,0.4);
+      color: var(--accent2);
+    }
+    .decision-badge.confirm {
+      background: rgba(245,158,11,0.12);
+      border: 1.5px solid rgba(245,158,11,0.4);
+      color: var(--warn);
+    }
+    .decision-badge.block {
+      background: rgba(239,68,68,0.12);
+      border: 1.5px solid rgba(239,68,68,0.4);
+      color: var(--danger);
+    }
+
+    .result-reason {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.02);
+      border-left: 3px solid var(--border-glow);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      margin-bottom: 24px;
+    }
+    .result-reason.proceed-reason { border-left-color: var(--accent2); }
+    .result-reason.confirm-reason { border-left-color: var(--warn); }
+    .result-reason.block-reason   { border-left-color: var(--danger); }
+
+    /* ── Metrics Grid ──────────────────────────────────────────────────────── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .metric-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      text-align: center;
+      transition: border-color var(--transition);
+    }
+    .metric-card:hover { border-color: var(--border-glow); }
+    .metric-value {
+      font-size: 1.9rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .metric-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    /* Colour bands for quality score */
+    .score-a { color: #34d399; }
+    .score-b { color: #6383ff; }
+    .score-c { color: #f59e0b; }
+    .score-d { color: #f97316; }
+    .score-f { color: #ef4444; }
+
+    /* ── Page Breakdown Bar ────────────────────────────────────────────────── */
+    .breakdown-bar {
+      height: 10px;
+      border-radius: 999px;
+      display: flex;
+      overflow: hidden;
+      margin: 8px 0 6px;
+      gap: 2px;
+    }
+    .breakdown-segment {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+    }
+    .seg-text   { background: var(--accent2); }
+    .seg-image  { background: var(--warn); }
+    .seg-mixed  { background: var(--primary); }
+
+    .breakdown-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+    .legend-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Chunk Scores Table ────────────────────────────────────────────────── */
+    .chunk-table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .chunk-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .chunk-table th {
+      background: rgba(255,255,255,0.03);
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .chunk-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .chunk-table tr:last-child td { border-bottom: none; }
+    .chunk-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .mini-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+      min-width: 60px;
+    }
+    .mini-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+    }
+
+    /* ── Issues List ───────────────────────────────────────────────────────── */
+    .issues-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .issue-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(245,158,11,0.05);
+      border: 1px solid rgba(245,158,11,0.15);
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+    .issue-icon {
+      color: var(--warn);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── Timings ───────────────────────────────────────────────────────────── */
+    .timings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+    .timing-item {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      text-align: center;
+    }
+    .timing-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--primary-light);
+      margin-bottom: 4px;
+    }
+    .timing-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    /* ── Confirm Dialog ────────────────────────────────────────────────────── */
+    #confirm-dialog {
+      display: none;
+      margin-top: 20px;
+      padding: 20px 24px;
+      background: rgba(245,158,11,0.07);
+      border: 1.5px solid rgba(245,158,11,0.3);
+      border-radius: var(--radius-md);
+    }
+    .confirm-title {
+      font-weight: 700;
+      color: var(--warn);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .confirm-text {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    .confirm-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .btn-confirm {
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      border: none;
+    }
+    .btn-proceed {
+      background: rgba(245,158,11,0.15);
+      border: 1.5px solid var(--warn);
+      color: var(--warn);
+    }
+    .btn-proceed:hover { background: rgba(245,158,11,0.25); }
+    .btn-cancel {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-cancel:hover { border-color: var(--border-glow); color: var(--text-primary); }
+
+    /* ── Subsection titles ─────────────────────────────────────────────────── */
+    .subsection-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .subsection-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Reset Button ──────────────────────────────────────────────────────── */
+    #reset-btn {
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text-secondary);
+      transition: all var(--transition);
+      display: none;
+    }
+    #reset-btn:hover { border-color: var(--border-glow); color: var(--text-primary); }
+
+    /* ── Footer ────────────────────────────────────────────────────────────── */
+    .footer {
+      text-align: center;
+      margin-top: 48px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .footer a { color: var(--primary-light); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    /* ── Scrollbar ─────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(99,131,255,0.3); border-radius: 3px; }
+
+    /* ── Responsive ────────────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .app-wrapper { padding: 24px 16px 60px; }
+      .card { padding: 20px; }
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="bg-orbs" aria-hidden="true"></div>
+
+  <div class="app-wrapper">
+
+    <!-- ── Header ─────────────────────────────────────────────────────────── -->
+    <header class="header">
+      <div class="header-badge">ModifAI Pipeline Gate</div>
+      <h1>Input Validation</h1>
+      <p>
+        Fast, cheap intent classification and data quality check — runs before
+        your AI pipeline spends any real compute.
+      </p>
+    </header>
+
+    <!-- ── Step 1: Upload PDF ──────────────────────────────────────────────── -->
+    <div class="card" id="upload-card">
+      <div class="section-label">
+        <div class="step-dot">1</div>
+        Upload Your Document
+      </div>
+
+      <div id="drop-zone" role="button" tabindex="0" aria-label="Upload PDF document">
+        <span class="drop-icon" id="drop-icon">📄</span>
+        <div class="drop-title" id="drop-title">Drop a PDF here, or click to browse</div>
+        <div class="drop-subtitle" id="drop-subtitle">PDF files only · Max ~100 MB</div>
+        <div class="file-info" id="file-info" style="display:none;"></div>
+      </div>
+      <input type="file" id="file-input" accept="application/pdf" />
+    </div>
+
+    <!-- ── Step 2: Configure ───────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="section-label">
+        <div class="step-dot">2</div>
+        Configure Validation
+      </div>
+
+      <div class="input-group">
+        <label class="input-label" for="intent-input">Your intent — what do you want to build?</label>
+        <input
+          type="text"
+          id="intent-input"
+          class="input-field"
+          placeholder='e.g. "I want to build an HR policy assistant"'
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="input-hint">The document will be checked against this goal.</div>
+      </div>
+
+      <!-- API key is injected server-side from .env — not exposed to the UI -->
+
+      <button id="run-btn" disabled>
+        Run Validation
+      </button>
+    </div>
+
+    <!-- ── Step 3: Progress ────────────────────────────────────────────────── -->
+    <div class="card" id="progress-section">
+      <div class="section-label">
+        <div class="step-dot">3</div>
+        Pipeline Running
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+      </div>
+
+      <div class="pipeline-steps" id="pipeline-steps">
+        <!-- Dynamically populated -->
+      </div>
+
+      <div class="log-stream" id="log-stream" aria-live="polite" aria-label="Pipeline log"></div>
+    </div>
+
+    <!-- ── Step 4: Results ─────────────────────────────────────────────────── -->
+    <div class="card" id="results-section">
+      <div class="section-label">
+        <div class="step-dot">4</div>
+        Validation Results
+      </div>
+
+      <div class="result-header" id="result-header"></div>
+
+      <div class="result-reason" id="result-reason"></div>
+
+      <!-- Confirm dialog for borderline cases -->
+      <div id="confirm-dialog">
+        <div class="confirm-title">⚠ Proceed anyway?</div>
+        <div class="confirm-text" id="confirm-text"></div>
+        <div class="confirm-actions">
+          <button class="btn-confirm btn-proceed" id="btn-proceed-anyway">Proceed to Pipeline →</button>
+          <button class="btn-confirm btn-cancel" id="btn-cancel-proceed">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="subsection-title">Key Metrics</div>
+      <div class="metrics-grid" id="metrics-grid"></div>
+
+      <!-- Page breakdown -->
+      <div class="subsection-title">Page Breakdown</div>
+      <div class="breakdown-bar" id="breakdown-bar"></div>
+      <div class="breakdown-legend" id="breakdown-legend"></div>
+
+      <!-- Chunk scores -->
+      <div class="subsection-title" style="margin-top:24px">Sampled Chunk Scores</div>
+      <div class="chunk-table-wrap">
+        <table class="chunk-table" id="chunk-table">
+          <thead>
+            <tr>
+              <th>Chunk ID</th>
+              <th>Source</th>
+              <th>Quality</th>
+              <th>Score Bar</th>
+              <th>Extraction Conf.</th>
+            </tr>
+          </thead>
+          <tbody id="chunk-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Issues found -->
+      <div id="issues-section" style="margin-top:24px;display:none">
+        <div class="subsection-title">Issues Found</div>
+        <div class="issues-list" id="issues-list"></div>
+      </div>
+
+      <!-- Timings -->
+      <div class="subsection-title" style="margin-top:24px">Stage Timings</div>
+      <div class="timings-grid" id="timings-grid"></div>
+
+      <!-- Reset -->
+      <div style="text-align:center;margin-top:28px">
+        <button id="reset-btn" style="display:inline-block">← Validate Another Document</button>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>
+        ModifAI · Input Validation Module ·
+        <a href="https://openrouter.ai" target="_blank" rel="noopener">OpenRouter</a> ·
+        OCR runs free in your browser via Tesseract.js
+      </p>
+    </footer>
+  </div>
+
+  <!-- ── External Libraries (CDN) ─────────────────────────────────────────── -->
+
+  <!-- pdf.js -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module" id="pdfjs-script"></script>
+
+  <!-- ── Main Application Script ─────────────────────────────────────────── -->
+  <script type="module">
+    // ── Wait for pdf.js to be available ──────────────────────────────────────
+    // We load it as a module — import it properly
+    let pdfjsLib = null;
+
+    async function loadPdfJs() {
+      const mod = await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs");
+      pdfjsLib = mod;
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs";
+      return pdfjsLib;
+    }
+
+    // ── Tesseract.js from CDN ─────────────────────────────────────────────
+    async function loadTesseract() {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+        script.onload = () => resolve(window.Tesseract);
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    // ── Transformers.js (MiniLM embeddings) ──────────────────────────────
+    let transformersPipeline = null;
+    async function loadTransformers() {
+      const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js");
+      transformersPipeline = pipeline;
+      return pipeline;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DOM references
+    // ─────────────────────────────────────────────────────────────────────────
+    const dropZone      = document.getElementById("drop-zone");
+    const fileInput     = document.getElementById("file-input");
+    const dropIcon      = document.getElementById("drop-icon");
+    const dropTitle     = document.getElementById("drop-title");
+    const dropSubtitle  = document.getElementById("drop-subtitle");
+    const fileInfoEl    = document.getElementById("file-info");
+    const intentInput   = document.getElementById("intent-input");
+    // API key is injected by server.js from the environment — never in the UI
+    const getApiKey = () => (window.__MODIFAI_CONFIG__?.apiKey || "");
+    const runBtn        = document.getElementById("run-btn");
+    const progressSec   = document.getElementById("progress-section");
+    const progressBar   = document.getElementById("progress-bar");
+    const pipelineSteps = document.getElementById("pipeline-steps");
+    const logStream     = document.getElementById("log-stream");
+    const resultsSec    = document.getElementById("results-section");
+    const resetBtn      = document.getElementById("reset-btn");
+    const confirmDialog = document.getElementById("confirm-dialog");
+    const confirmText   = document.getElementById("confirm-text");
+
+    let selectedFile = null;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // File handling
+    // ─────────────────────────────────────────────────────────────────────────
+    function setFile(file) {
+      if (!file || file.type !== "application/pdf") {
+        alert("Please select a PDF file.");
+        return;
+      }
+      selectedFile = file;
+      dropIcon.textContent = "✅";
+      dropTitle.textContent = "PDF loaded";
+      dropSubtitle.textContent = "";
+      fileInfoEl.textContent = `${file.name}  ·  ${(file.size / 1024).toFixed(0)} KB`;
+      fileInfoEl.style.display = "inline-flex";
+      dropZone.classList.add("has-file");
+      updateRunBtn();
+    }
+
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+    fileInput.addEventListener("change", e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      const file = e.dataTransfer.files[0];
+      if (file) setFile(file);
+    });
+
+    function updateRunBtn() {
+      runBtn.disabled = !(selectedFile && intentInput.value.trim().length > 0);
+    }
+    intentInput.addEventListener("input", updateRunBtn);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pipeline step definitions
+    // ─────────────────────────────────────────────────────────────────────────
+    const STAGES = [
+      { key: "pdf-loading",     label: "PDF Loading",       icon: "📂" },
+      { key: "page-classification", label: "Page Classification", icon: "🔎" },
+      { key: "ocr",             label: "OCR",               icon: "👁" },
+      { key: "chunking",        label: "Chunking",          icon: "✂️" },
+      { key: "sampling",        label: "Sampling",          icon: "🎯" },
+      { key: "intent-check",    label: "Intent Check",      icon: "🧠" },
+      { key: "quality-scoring", label: "Quality Scoring",   icon: "⭐" },
+      { key: "aggregation",     label: "Aggregation",       icon: "📊" },
+      { key: "done",            label: "Complete",          icon: "✅" },
+    ];
+
+    function buildPipelineSteps() {
+      pipelineSteps.innerHTML = "";
+      for (const stage of STAGES) {
+        const el = document.createElement("div");
+        el.className = "pipeline-step";
+        el.id = `step-${stage.key}`;
+        el.innerHTML = `
+          <div class="step-icon" id="step-icon-${stage.key}">${stage.icon}</div>
+          <div class="step-content">
+            <div class="step-name">${stage.label}</div>
+            <div class="step-message" id="step-msg-${stage.key}">Waiting…</div>
+            <div class="step-detail" id="step-detail-${stage.key}" style="display:none"></div>
+          </div>`;
+        pipelineSteps.appendChild(el);
+      }
+    }
+
+    function updateStep(stage, message, detail, state) {
+      const el = document.getElementById(`step-${stage}`);
+      const msgEl = document.getElementById(`step-msg-${stage}`);
+      const detailEl = document.getElementById(`step-detail-${stage}`);
+      if (!el) return;
+
+      // Remove all state classes first
+      el.classList.remove("active", "done", "error-step");
+      if (state === "active") el.classList.add("active");
+      else if (state === "done") el.classList.add("done");
+      else if (state === "error") el.classList.add("error-step");
+
+      if (message) msgEl.textContent = message;
+      if (detail) {
+        detailEl.textContent = detail;
+        detailEl.style.display = "block";
+      }
+    }
+
+    function addLog(text, cls = "") {
+      const line = document.createElement("div");
+      line.className = `log-line${cls ? " " + cls : ""}`;
+      line.textContent = `> ${text}`;
+      logStream.appendChild(line);
+      logStream.scrollTop = logStream.scrollHeight;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Module A — PDF loading & classification (inline)
+    // ─────────────────────────────────────────────────────────────────────────
+    const TEXT_DENSITY_THRESHOLD = 100;
+
+    async function loadAndClassifyPdf(fileBuffer, lib, onProgress) {
+      const loadingTask = lib.getDocument({ data: fileBuffer });
+      const pdf = await loadingTask.promise;
+      const results = [];
+      const total = pdf.numPages;
+
+      for (let i = 1; i <= total; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const extractedText = textContent.items.map(item => item.str).join(" ").trim();
+
+        const opList = await page.getOperatorList();
+        const IMAGE_OPS = [85, 86]; // paintImageXObject, paintInlineImageXObject
+        const hasImageOps = opList.fnArray.some(op => IMAGE_OPS.includes(op));
+
+        let classification, needsOCR;
+        if (extractedText.length >= TEXT_DENSITY_THRESHOLD && !hasImageOps) {
+          classification = "text-native"; needsOCR = false;
+        } else if (extractedText.length < TEXT_DENSITY_THRESHOLD && hasImageOps) {
+          classification = "image-only"; needsOCR = true;
+        } else {
+          classification = "mixed";
+          needsOCR = extractedText.length < TEXT_DENSITY_THRESHOLD;
+        }
+
+        results.push({ pageNumber: i, classification, extractedText, needsOCR });
+        if (onProgress) onProgress(i, total);
+        page.cleanup();
+      }
+      return results;
+    }
+
+    async function renderPageToCanvas(fileBuffer, pageNumber, lib, scale = 2.0) {
+      const pdf = await lib.getDocument({ data: fileBuffer }).promise;
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d");
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      page.cleanup();
+      return canvas;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Module B — OCR preprocessing & Tesseract
+    // ─────────────────────────────────────────────────────────────────────────
+    function preprocessCanvas(canvas) {
+      const ctx = canvas.getContext("2d");
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        const value = gray > 150 ? 255 : 0;
+        data[i] = data[i+1] = data[i+2] = value;
+      }
+      ctx.putImageData(imageData, 0, 0);
+      return canvas;
+    }
+
+    async function runOcrOnPage(canvas, pageNumber, Tesseract) {
+      const { data } = await Tesseract.recognize(canvas, "eng");
+      const wordConfidences = data.words.map(w => ({ word: w.text, confidence: w.confidence }));
+      const averageConfidence = wordConfidences.length > 0
+        ? wordConfidences.reduce((s, w) => s + w.confidence, 0) / wordConfidences.length
+        : 0;
+      return { pageNumber, text: data.text, averageConfidence, wordConfidences };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Module C — Chunking & sampling
+    // ─────────────────────────────────────────────────────────────────────────
+    const MAX_CHUNK_CHARS = 2000;
+    const OVERLAP_CHARS = 200;
+
+    function chunkText(pageText, pageNumber, sourceType, confidence) {
+      if (!pageText || !pageText.trim()) return [];
+      const paragraphs = pageText.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0);
+      const chunks = [];
+      let buffer = "", idx = 0;
+
+      const flush = () => {
+        const text = buffer.trim();
+        if (text.length > 0) chunks.push({ id: `p${pageNumber}-c${idx++}`, text, sourceType, confidence, pageNumber });
+        buffer = "";
+      };
+
+      for (const para of paragraphs) {
+        const segs = para.length > MAX_CHUNK_CHARS ? splitBySentences(para) : [para];
+        for (const seg of segs) {
+          if ((buffer + "\n\n" + seg).length > MAX_CHUNK_CHARS && buffer.length > 0) {
+            const overlap = buffer.slice(-OVERLAP_CHARS);
+            flush();
+            buffer = overlap + "\n\n" + seg;
+          } else {
+            buffer = buffer.length > 0 ? buffer + "\n\n" + seg : seg;
+          }
+        }
+      }
+      flush();
+      return chunks;
+    }
+
+    function splitBySentences(text) {
+      const sentences = text.match(/[^.!?]+[.!?]+(?:\s|$)/g) || [text];
+      const groups = [];
+      let current = "";
+      for (const s of sentences) {
+        if ((current + s).length > MAX_CHUNK_CHARS && current.length > 0) {
+          groups.push(current.trim()); current = s;
+        } else { current += s; }
+      }
+      if (current.trim().length > 0) groups.push(current.trim());
+      return groups;
+    }
+
+    function stratifiedSample(allChunks) {
+      if (allChunks.length === 0) return [];
+      const totalPages = new Set(allChunks.map(c => c.pageNumber)).size;
+      const sampleCount = Math.min(15, Math.max(3, Math.ceil(Math.sqrt(totalPages))));
+      if (allChunks.length <= sampleCount) return allChunks;
+      const step = allChunks.length / sampleCount;
+      return Array.from({ length: sampleCount }, (_, i) => allChunks[Math.floor(i * step)]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Module D — Intent classification
+    // ─────────────────────────────────────────────────────────────────────────
+    let embedder = null;
+
+    async function getEmbedder() {
+      if (embedder) return embedder;
+      addLog("Loading MiniLM embedding model (first run — may take a moment)…");
+      const pipeline = transformersPipeline || (await loadTransformers());
+      embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+      addLog("Embedding model loaded ✓", "done");
+      return embedder;
+    }
+
+    function cosineSimilarity(a, b) {
+      const dot = a.reduce((s, v, i) => s + v * b[i], 0);
+      const nA = Math.sqrt(a.reduce((s, v) => s + v*v, 0));
+      const nB = Math.sqrt(b.reduce((s, v) => s + v*v, 0));
+      return (nA && nB) ? dot / (nA * nB) : 0;
+    }
+
+    async function embedText(text) {
+      const embed = await getEmbedder();
+      const out = await embed(text.slice(0, 8000), { pooling: "mean", normalize: true });
+      return Array.from(out.data);
+    }
+
+    async function checkIntentMatch(userIntent, sampleText) {
+      const [iv, sv] = await Promise.all([embedText(userIntent), embedText(sampleText)]);
+      const similarity = cosineSimilarity(iv, sv);
+      const needsLLMCheck = similarity >= 0.4 && similarity <= 0.7;
+      return { similarity, needsLLMCheck };
+    }
+
+    function similarityToVerdict(sim) {
+      return sim > 0.7 ? "match" : sim < 0.4 ? "mismatch" : "partial";
+    }
+
+    async function llmIntentVerdict(userIntent, sampleText, apiKey) {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "meta-llama/llama-3.1-8b-instruct",
+          messages: [{ role: "user", content: `A user wants to build: "${userIntent}"\n\nDocument sample:\n"""${sampleText.slice(0,3000)}"""\n\nDoes the document match the user's goal?\nRespond ONLY with valid JSON: {"verdict":"match"|"partial"|"mismatch","reason":"one sentence"}` }],
+          max_tokens: 150, temperature: 0.1
+        })
+      });
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}`);
+      const d = await res.json();
+      const raw = d.choices[0].message.content.trim().replace(/```(?:json)?|```/g, "").trim();
+      try { return JSON.parse(raw); }
+      catch { return { verdict: "partial", reason: "Could not parse LLM response." }; }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Module E — Quality scoring
+    // ─────────────────────────────────────────────────────────────────────────
+    async function scoreChunkQuality(chunkText, apiKey) {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "qwen/qwen-2.5-7b-instruct",
+          messages: [{ role: "user", content: `Rate this document excerpt 0-100 on: specificity (not vague), grounding (real facts/procedures), readability (not garbled). Give one combined score.\n\nExcerpt:\n"""${chunkText.slice(0,2000)}"""\n\nRespond ONLY with valid JSON: {"score":number,"issues":["issue1"]}` }],
+          max_tokens: 200, temperature: 0.1
+        })
+      });
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}`);
+      const d = await res.json();
+      const raw = d.choices[0].message.content.trim().replace(/```(?:json)?|```/g, "").trim();
+      try {
+        const p = JSON.parse(raw);
+        p.score = Math.max(0, Math.min(100, p.score));
+        p.issues = Array.isArray(p.issues) ? p.issues.slice(0,3) : [];
+        return p;
+      } catch { return { score: 50, issues: ["Parse error — defaulting to 50."] }; }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Module F — Aggregation & decision
+    // ─────────────────────────────────────────────────────────────────────────
+    function aggregateScore(scoredChunks) {
+      if (!scoredChunks.length) return 0;
+      const wSum = scoredChunks.reduce((s,c) => s + c.qualityScore * c.extractionConfidence, 0);
+      const wTot = scoredChunks.reduce((s,c) => s + c.extractionConfidence, 0);
+      return wTot > 0 ? wSum / wTot : 0;
+    }
+
+    function decide(finalScore, intentVerdict) {
+      if (intentVerdict === "mismatch")
+        return { decision: "block", reason: "The document does not match your stated intent. Please upload a more relevant document, or update your goal description." };
+      if (finalScore >= 70 && intentVerdict === "match")
+        return { decision: "proceed", reason: "Document quality and intent match look great. Proceeding to the main ModifAI pipeline automatically." };
+      if (finalScore >= 45)
+        return { decision: "confirm-with-user", reason: `Quality score (${finalScore.toFixed(1)}/100) is borderline${intentVerdict === "partial" ? ", and intent is only a partial match" : ""}. Results may be lower quality than expected. Proceed anyway?` };
+      return { decision: "block", reason: "Document quality is too low (score: " + finalScore.toFixed(1) + "/100). It may be mostly unreadable, too sparse, or corrupted by a poor scan." };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Main pipeline runner
+    // ─────────────────────────────────────────────────────────────────────────
+    async function runValidation() {
+      const userIntent = intentInput.value.trim();
+      const apiKey = getApiKey();
+
+      if (!selectedFile || !userIntent) return;
+
+      // ── Setup UI ──────────────────────────────────────────────────────────
+      runBtn.disabled = true;
+      progressSec.style.display = "block";
+      resultsSec.style.display = "none";
+      confirmDialog.style.display = "none";
+      buildPipelineSteps();
+      logStream.innerHTML = "";
+      progressBar.style.width = "0%";
+
+      const emit = (stage, message, progress, detail) => {
+        progressBar.style.width = (progress ?? 0) + "%";
+        updateStep(stage, message, detail, "active");
+        addLog(message, "active");
+        if (detail) addLog("  → " + detail);
+        // Mark previous stages as done
+        const idx = STAGES.findIndex(s => s.key === stage);
+        for (let i = 0; i < idx; i++) {
+          const prevEl = document.getElementById(`step-${STAGES[i].key}`);
+          if (prevEl) { prevEl.classList.remove("active"); prevEl.classList.add("done"); }
+        }
+      };
+
+      const timings = { pdfLoad: 0, ocr: 0, chunking: 0, intentCheck: 0, qualityScoring: 0, total: 0 };
+      const totalStart = performance.now();
+
+      try {
+        // ── Load libraries ─────────────────────────────────────────────────
+        emit("pdf-loading", "Loading libraries…", 2);
+        const [lib, Tesseract] = await Promise.all([
+          loadPdfJs(),
+          loadTesseract().catch(() => null)
+        ]);
+        addLog("Libraries loaded ✓", "done");
+
+        // ── Read file ──────────────────────────────────────────────────────
+        emit("pdf-loading", "Reading PDF file…", 4);
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        const fileBuffer = new Uint8Array(arrayBuffer);
+
+        // ── Step 1: Classify pages ─────────────────────────────────────────
+        emit("page-classification", "Classifying PDF pages…", 5);
+        const t0 = performance.now();
+
+        const pages = await loadAndClassifyPdf(fileBuffer, lib, (pageNum, total) => {
+          progressBar.style.width = (5 + Math.round((pageNum / total) * 20)) + "%";
+          updateStep("page-classification", `Classifying page ${pageNum}/${total}…`, null, null, "active");
+        });
+
+        timings.pdfLoad = performance.now() - t0;
+
+        const textNative = pages.filter(p => p.classification === "text-native").length;
+        const imageOnly = pages.filter(p => p.classification === "image-only").length;
+        const mixed = pages.filter(p => p.classification === "mixed").length;
+        const ocrPages = pages.filter(p => p.needsOCR);
+
+        emit("page-classification",
+          `${pages.length} pages: ${textNative} text-native, ${imageOnly} image-only, ${mixed} mixed`,
+          25, `${ocrPages.length} page(s) flagged for OCR`);
+        addLog(`Classification done in ${timings.pdfLoad.toFixed(0)}ms`, "done");
+
+        // ── Step 2: OCR ────────────────────────────────────────────────────
+        const t1 = performance.now();
+        const ocrResults = new Map();
+
+        if (ocrPages.length > 0 && Tesseract) {
+          for (let i = 0; i < ocrPages.length; i++) {
+            const ocrPage = ocrPages[i];
+            emit("ocr", `OCR: page ${ocrPage.pageNumber} (${i+1}/${ocrPages.length})…`,
+              25 + Math.round(((i + 0.5) / ocrPages.length) * 20));
+            try {
+              const canvas = await renderPageToCanvas(fileBuffer, ocrPage.pageNumber, lib, 2.0);
+              preprocessCanvas(canvas);
+              const result = await runOcrOnPage(canvas, ocrPage.pageNumber, Tesseract);
+              ocrResults.set(ocrPage.pageNumber, result);
+              addLog(`Page ${ocrPage.pageNumber} OCR: conf=${result.averageConfidence.toFixed(1)}%`, "done");
+            } catch (err) {
+              addLog(`Page ${ocrPage.pageNumber} OCR failed: ${err.message}`, "error");
+            }
+          }
+        } else if (ocrPages.length > 0) {
+          emit("ocr", `${ocrPages.length} page(s) need OCR but Tesseract failed to load.`, 45);
+          addLog("Tesseract unavailable — OCR skipped.", "error");
+        } else {
+          emit("ocr", "No pages need OCR — all text-native.", 45, "Skipping OCR entirely ✓");
+          updateStep("ocr", "Skipped — all text-native.", null, "done");
+        }
+
+        timings.ocr = performance.now() - t1;
+
+        // ── Step 3: Chunking ───────────────────────────────────────────────
+        emit("chunking", "Chunking document text…", 52);
+        const t2 = performance.now();
+
+        let allChunks = [];
+        for (const page of pages) {
+          const ocrResult = ocrResults.get(page.pageNumber);
+          if (!page.needsOCR && page.extractedText.trim()) {
+            allChunks.push(...chunkText(page.extractedText, page.pageNumber, "text-native", 1.0));
+          }
+          if (page.needsOCR && page.extractedText.trim().length >= 100) {
+            allChunks.push(...chunkText(page.extractedText, page.pageNumber, "text-native", 1.0));
+          }
+          if (ocrResult && ocrResult.text.trim()) {
+            const conf = ocrResult.averageConfidence / 100;
+            allChunks.push(...chunkText(ocrResult.text, page.pageNumber, "ocr", conf));
+          }
+        }
+
+        timings.chunking = performance.now() - t2;
+        emit("chunking", `${allChunks.length} chunks created.`, 55);
+        addLog(`Chunking done in ${timings.chunking.toFixed(0)}ms`, "done");
+
+        if (allChunks.length === 0) {
+          throw new Error("No extractable text found in the document.");
+        }
+
+        // ── Step 4: Sampling ───────────────────────────────────────────────
+        emit("sampling", "Running stratified sample…", 57);
+        const sample = stratifiedSample(allChunks);
+        const combinedSampleText = sample.map(c => c.text).join("\n\n");
+        emit("sampling", `Selected ${sample.length} chunks from ${pages.length} pages.`, 60);
+
+        // ── Step 5: Intent check ───────────────────────────────────────────
+        emit("intent-check", "Loading embedding model…", 62);
+        const t3 = performance.now();
+        await loadTransformers();
+
+        const { similarity, needsLLMCheck } = await checkIntentMatch(userIntent, combinedSampleText);
+        let intentVerdict = similarityToVerdict(similarity);
+        let intentReason = "";
+
+        emit("intent-check", `Embedding similarity: ${similarity.toFixed(3)} → ${intentVerdict}`, 66);
+
+        if (needsLLMCheck && apiKey) {
+          emit("intent-check", "Borderline score — asking LLM for verdict…", 68);
+          try {
+            const llmRes = await llmIntentVerdict(userIntent, combinedSampleText, apiKey);
+            intentVerdict = llmRes.verdict;
+            intentReason = llmRes.reason;
+            emit("intent-check", `LLM verdict: ${intentVerdict}`, 70, intentReason);
+          } catch (err) {
+            addLog(`LLM intent check failed: ${err.message} — using embedding verdict.`, "error");
+          }
+        }
+
+        timings.intentCheck = performance.now() - t3;
+        addLog(`Intent: ${intentVerdict} (sim=${similarity.toFixed(3)})`, "done");
+
+        // ── Step 6: Quality scoring ────────────────────────────────────────
+        emit("quality-scoring", `Scoring ${sample.length} chunks…`, 72);
+        const t4 = performance.now();
+
+        let scoredChunks = [];
+
+        if (apiKey) {
+          for (let i = 0; i < sample.length; i++) {
+            const c = sample[i];
+            emit("quality-scoring", `Scoring chunk ${i+1}/${sample.length}…`,
+              72 + Math.round(((i+1) / sample.length) * 18));
+            try {
+              const q = await scoreChunkQuality(c.text, apiKey);
+              scoredChunks.push({ chunkId: c.id, qualityScore: q.score, extractionConfidence: c.confidence, issues: q.issues });
+              addLog(`${c.id}: score=${q.score}`, "done");
+            } catch (err) {
+              scoredChunks.push({ chunkId: c.id, qualityScore: 50, extractionConfidence: c.confidence, issues: ["Scoring error"] });
+              addLog(`${c.id}: scoring failed — defaulting to 50`, "error");
+            }
+          }
+        } else {
+          addLog("No API key — using heuristic quality scores.");
+          scoredChunks = sample.map(c => ({
+            chunkId: c.id,
+            qualityScore: Math.round(c.confidence * 75 + (Math.min(c.text.length, 500) / 500) * 25),
+            extractionConfidence: c.confidence,
+            issues: c.confidence < 0.7 ? ["Low OCR confidence"] : []
+          }));
+          emit("quality-scoring", "Heuristic scoring complete (no API key).", 90);
+        }
+
+        timings.qualityScoring = performance.now() - t4;
+
+        // ── Step 7: Aggregate ──────────────────────────────────────────────
+        emit("aggregation", "Aggregating scores…", 94);
+        const finalScore = aggregateScore(scoredChunks);
+        const { decision, reason } = decide(finalScore, intentVerdict);
+        timings.total = performance.now() - totalStart;
+
+        updateStep("done", `Score: ${finalScore.toFixed(1)}/100 | Decision: ${decision}`, null, "done");
+        for (const s of STAGES) {
+          const el = document.getElementById(`step-${s.key}`);
+          if (el) { el.classList.remove("active"); el.classList.add("done"); }
+        }
+        progressBar.style.width = "100%";
+        addLog(`✓ Done! Score: ${finalScore.toFixed(1)} | ${decision}`, "done");
+
+        // ── Render results ─────────────────────────────────────────────────
+        renderResults({
+          finalScore, intentVerdict, intentSimilarity: similarity, decision, reason,
+          pageBreakdown: { total: pages.length, textNative, imageOnly, mixed },
+          sampledChunks: sample.length, scoredChunks, timings,
+          allIssues: [...new Set(scoredChunks.flatMap(c => c.issues).filter(i => i))],
+        });
+
+      } catch (err) {
+        emit("error", `Error: ${err.message}`, null, null);
+        for (const s of STAGES) {
+          const el = document.getElementById(`step-${s.key}`);
+          if (el && el.classList.contains("active")) el.classList.add("error-step");
+        }
+        addLog(`ERROR: ${err.message}`, "error");
+        runBtn.disabled = false;
+        console.error(err);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Render results panel
+    // ─────────────────────────────────────────────────────────────────────────
+    function renderResults(data) {
+      const { finalScore, intentVerdict, intentSimilarity, decision, reason,
+              pageBreakdown, sampledChunks, scoredChunks, timings, allIssues } = data;
+
+      resultsSec.style.display = "block";
+      resultsSec.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      // Decision badge
+      const decisionMap = {
+        "proceed": { emoji: "✅", label: "Proceed to Pipeline", cls: "proceed" },
+        "confirm-with-user": { emoji: "⚠️", label: "Needs Confirmation", cls: "confirm" },
+        "block": { emoji: "❌", label: "Blocked", cls: "block" }
+      };
+      const dm = decisionMap[decision];
+      document.getElementById("result-header").innerHTML = `
+        <div class="decision-badge ${dm.cls}">${dm.emoji} ${dm.label}</div>
+      `;
+
+      const reasonEl = document.getElementById("result-reason");
+      reasonEl.textContent = reason;
+      reasonEl.className = `result-reason ${decision === "proceed" ? "proceed" : decision === "confirm-with-user" ? "confirm" : "block"}-reason`;
+
+      // Confirm dialog
+      if (decision === "confirm-with-user") {
+        confirmDialog.style.display = "block";
+        confirmText.textContent = reason;
+        document.getElementById("btn-proceed-anyway").onclick = () => {
+          confirmDialog.innerHTML = `<div style="color:var(--accent2);font-weight:600;padding:10px 0">✅ Confirmed — handing off to pipeline.</div>`;
+        };
+        document.getElementById("btn-cancel-proceed").onclick = () => {
+          confirmDialog.style.display = "none";
+        };
+      }
+
+      // Metrics
+      const scoreGrade = finalScore >= 85 ? "A" : finalScore >= 70 ? "B" : finalScore >= 55 ? "C" : finalScore >= 40 ? "D" : "F";
+      const gradeColor = { A:"score-a", B:"score-b", C:"score-c", D:"score-d", F:"score-f" }[scoreGrade];
+      const intentLabel = intentVerdict === "match" ? "Strong Match" : intentVerdict === "partial" ? "Partial" : "Mismatch";
+      const intentColor = intentVerdict === "match" ? "score-a" : intentVerdict === "partial" ? "score-c" : "score-f";
+      const ocrChunks = scoredChunks.filter(c => c.extractionConfidence < 1.0);
+      const avgOcr = ocrChunks.length > 0 ? (ocrChunks.reduce((s,c) => s + c.extractionConfidence, 0) / ocrChunks.length * 100).toFixed(0) : null;
+
+      document.getElementById("metrics-grid").innerHTML = `
+        <div class="metric-card">
+          <div class="metric-value ${gradeColor}">${finalScore.toFixed(0)}<span style="font-size:0.9rem">/100</span></div>
+          <div class="metric-label">Quality Score</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="font-size:1.4rem" class="${intentColor}">${intentLabel}</div>
+          <div class="metric-label">Intent Match</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:var(--primary-light)">${(intentSimilarity * 100).toFixed(0)}%</div>
+          <div class="metric-label">Embed Similarity</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:var(--text-secondary)">${pageBreakdown.total}</div>
+          <div class="metric-label">Total Pages</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:var(--text-secondary)">${sampledChunks}</div>
+          <div class="metric-label">Chunks Sampled</div>
+        </div>
+        ${avgOcr !== null ? `<div class="metric-card"><div class="metric-value" style="color:var(--warn)">${avgOcr}%</div><div class="metric-label">Avg OCR Conf.</div></div>` : ""}
+      `;
+
+      // Breakdown bar
+      const total = pageBreakdown.total || 1;
+      const tnPct = (pageBreakdown.textNative / total * 100).toFixed(1);
+      const ioPct = (pageBreakdown.imageOnly / total * 100).toFixed(1);
+      const mxPct = (pageBreakdown.mixed / total * 100).toFixed(1);
+      document.getElementById("breakdown-bar").innerHTML = `
+        <div class="breakdown-segment seg-text" style="width:${tnPct}%"></div>
+        <div class="breakdown-segment seg-image" style="width:${ioPct}%"></div>
+        <div class="breakdown-segment seg-mixed" style="width:${mxPct}%"></div>
+      `;
+      document.getElementById("breakdown-legend").innerHTML = `
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>${pageBreakdown.textNative} Text-native (${tnPct}%)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>${pageBreakdown.imageOnly} Image-only (${ioPct}%)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>${pageBreakdown.mixed} Mixed (${mxPct}%)</div>
+      `;
+
+      // Chunk table
+      const tbody = document.getElementById("chunk-tbody");
+      tbody.innerHTML = scoredChunks.map(c => {
+        const scoreColor = c.qualityScore >= 70 ? "#34d399" : c.qualityScore >= 50 ? "#f59e0b" : "#ef4444";
+        const confPct = (c.extractionConfidence * 100).toFixed(0);
+        return `<tr>
+          <td>${c.chunkId}</td>
+          <td>${c.extractionConfidence < 1.0 ? "🔎 OCR" : "📄 Text"}</td>
+          <td style="color:${scoreColor};font-weight:600">${c.qualityScore}</td>
+          <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${c.qualityScore}%"></div></div></td>
+          <td>${confPct}%</td>
+        </tr>`;
+      }).join("");
+
+      // Issues
+      if (allIssues.length > 0) {
+        document.getElementById("issues-section").style.display = "block";
+        document.getElementById("issues-list").innerHTML = allIssues.map(i =>
+          `<div class="issue-item"><span class="issue-icon">⚠</span>${i}</div>`
+        ).join("");
+      }
+
+      // Timings
+      const timingItems = [
+        { label: "PDF Load", ms: timings.pdfLoad },
+        { label: "OCR", ms: timings.ocr },
+        { label: "Chunking", ms: timings.chunking },
+        { label: "Intent Check", ms: timings.intentCheck },
+        { label: "Quality Score", ms: timings.qualityScoring },
+        { label: "Total", ms: timings.total },
+      ];
+      document.getElementById("timings-grid").innerHTML = timingItems.map(t => `
+        <div class="timing-item">
+          <div class="timing-value">${t.ms < 1000 ? t.ms.toFixed(0) + "ms" : (t.ms/1000).toFixed(1) + "s"}</div>
+          <div class="timing-label">${t.label}</div>
+        </div>
+      `).join("");
+
+      resetBtn.style.display = "inline-block";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Wire up buttons
+    // ─────────────────────────────────────────────────────────────────────────
+    runBtn.addEventListener("click", runValidation);
+
+    resetBtn.addEventListener("click", () => {
+      selectedFile = null;
+      fileInput.value = "";
+      dropIcon.textContent = "📄";
+      dropTitle.textContent = "Drop a PDF here, or click to browse";
+      dropSubtitle.textContent = "PDF files only · Max ~100 MB";
+      fileInfoEl.style.display = "none";
+      dropZone.classList.remove("has-file");
+      intentInput.value = "";
+      progressSec.style.display = "none";
+      resultsSec.style.display = "none";
+      resetBtn.style.display = "none";
+      runBtn.disabled = true;
+      progressBar.style.width = "0%";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+  </script>
+</body>
+</html>
