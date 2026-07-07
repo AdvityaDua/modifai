@@ -7,12 +7,14 @@
 
 ## The Problem We're Solving
 
-When a user uploads a PDF and says *"build me an HR policy assistant"*, two silent failures can happen before any real AI work begins:
+Most AI document pipelines are blind optimists — they accept whatever file the user uploads and immediately start burning compute. If the document is the wrong type, garbled, or barely readable, the model still runs, the dataset still generates, and the credits still disappear. The user gets a low-quality output and no explanation.
 
-1. **Wrong document.** The PDF is actually a sales contract. The entire downstream pipeline produces garbage.
-2. **Bad document.** The PDF is a 200-page blurry scan. Even if it's the right kind, the output quality will be terrible.
+Step 1 exists to stop that. Before ModifAI spends a single token on dataset generation or agent training, it answers two questions:
 
-Traditional approaches either ignore this and proceed (wasting credits), or run expensive cloud OCR on every page of every document (wasting money). **ModifAI does neither.**
+- **Does this document match what the user actually wants to build?** A recipe PDF cannot produce a useful HR policy assistant, no matter how good the downstream model is.
+- **Is this document readable enough to build from?** A 200-page blurry scan with no real text layer will produce noisy, unreliable training data even if the topic is correct.
+
+The answers come from a layered, cost-minimising pipeline: free local checks run first on everything, and a paid LLM call only enters the picture when those checks are genuinely uncertain. On most documents, the whole validation costs nothing.
 
 ---
 
@@ -86,18 +88,6 @@ npm start
 
 ---
 
-## Deploying to Render
-
-1. Go to [render.com](https://render.com) → **New** → **Web Service**
-2. Connect your GitHub repo and select this folder
-3. Render auto-detects `render.yaml` and configures the service
-4. In the Render dashboard → **Environment** → add `OPENROUTER_API_KEY`
-5. Deploy — that's it
-
-The `render.yaml` in this repo handles everything else.
-
----
-
 ## Acceptance Checklist (from Build Manual §13)
 
 - [ ] Text-native PDF → zero OCR calls, processed in milliseconds
@@ -136,7 +126,7 @@ step1-input-validation/
 
 ## What This Hands Off
 
-When `validateUpload()` returns `decision: "proceed"` (or the user confirms on a borderline case), the resulting chunks — already tagged with `source_type` and `confidence` — are passed directly to the LangChain/LangGraph orchestrator in Step 2. This module's job ends here. It is a gate, not a generator.
+When `validateUpload()` returns `decision: "proceed"` (or the user confirms on a borderline case), the resulting chunks — already tagged with `source_type` and `confidence` — are passed directly to the LangChain/LangGraph orchestrator in Step 2.
 
 ---
 
