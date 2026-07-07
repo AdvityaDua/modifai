@@ -39,9 +39,9 @@ Server (Express)
 
 | Stage | What Happens | Cost |
 |---|---|---|
-| **A — PDF Classification** | Every page is classified as text-native, image-only, or mixed using pdf.js | Free |
-| **B — Selective OCR** | *Only* image-flagged pages are rendered to canvas and processed by Tesseract.js WASM | Free (client CPU) |
-| **C — Semantic Chunking** | Text is split on paragraph boundaries with √-scaled stratified sampling | Free |
+| **A — PDF Classification** | Every page classified as text-native, image-only, or mixed using pdf.js | Free |
+| **B — Selective OCR** | *Only* image-flagged pages rendered to canvas and processed by Tesseract.js WASM | Free (client CPU) |
+| **C — Semantic Chunking** | Text split on paragraph boundaries with √-scaled stratified sampling | Free |
 | **D — Intent Matching** | `all-MiniLM-L6-v2` embeds user intent vs. document sample; cosine similarity computed | Free |
 | **D — LLM Escalation** | If similarity is 0.4–0.7 (genuinely ambiguous), one LLM call gets a verdict | ~$0.001 |
 | **E — Quality Scoring** | LLM rates sampled chunks on specificity, grounding, and readability | ~$0.001/chunk |
@@ -66,7 +66,7 @@ Server (Express)
 ```bash
 # 1. Clone & install
 git clone https://github.com/AdvityaDua/modifai.git
-cd modifai/step1-input-validation
+cd modifai
 npm install
 
 # 2. Add your OpenRouter API key
