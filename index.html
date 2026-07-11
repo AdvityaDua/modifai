@@ -769,6 +769,44 @@
       .card { padding: 20px; }
       .metrics-grid { grid-template-columns: repeat(2, 1fr); }
     }
+    /* Phase 4.4: Mobile Responsive CSS */
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+        padding: 10px;
+      }
+      .hero {
+        padding: 20px 10px;
+      }
+      .hero h1 {
+        font-size: 2rem;
+      }
+      .upload-zone {
+        padding: 24px 16px;
+      }
+      .chunk-table th:nth-child(2),
+      .chunk-table td:nth-child(2),
+      .chunk-table th:nth-child(4),
+      .chunk-table td:nth-child(4),
+      .chunk-table th:nth-child(5),
+      .chunk-table td:nth-child(5) {
+        display: none; /* Hide Source, Score Bar, and Extraction Conf on mobile */
+      }
+    }
+    .btn-browse {
+      display: none;
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: var(--accent1);
+      color: white;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    @media (max-width: 768px) {
+      .drop-title, .drop-subtitle { display: none; }
+      .btn-browse { display: inline-block; }
+    }
   </style>
 </head>
 
@@ -840,11 +878,18 @@
         Upload Your Document
       </div>
 
+      <!-- Phase 4.3: Session Cache Banner -->
+      <div id="cache-banner" style="display:none; background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
+        <div style="font-weight: 600; color: var(--text-primary);">🔁 We validated this document recently.</div>
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 4px;" id="cache-banner-text">You can run a fresh validation, or view the previous result.</div>
+        <button id="btn-view-cache" style="margin-top: 10px; background: transparent; color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">View Previous Result</button>
+      </div>
       <div id="drop-zone" role="button" tabindex="0" aria-label="Upload PDF document">
         <span class="drop-icon" id="drop-icon">ðŸ“„</span>
         <div class="drop-title" id="drop-title">Drop a PDF here, or click to browse</div>
         <div class="drop-subtitle" id="drop-subtitle">PDF files only Â· Max ~100 MB</div>
         <div class="file-info" id="file-info" style="display:none;"></div>
+        <div class="btn-browse" id="btn-browse">Browse Files</div>
       </div>
       <input type="file" id="file-input" accept="application/pdf" />
     </div>
@@ -900,6 +945,7 @@
       <div class="progress-bar-wrap">
         <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
       </div>
+      <div id="secondary-progress" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 5px; text-align: right; height: 16px;"></div>
 
       <div class="pipeline-steps" id="pipeline-steps">
         <!-- Dynamically populated -->
@@ -918,6 +964,11 @@
       <div class="result-header" id="result-header"></div>
 
       <div class="result-reason" id="result-reason"></div>
+      <!-- Phase 4.1: Next steps -->
+      <div id="next-steps-section" style="display:none; margin-top:20px;">
+        <div style="font-weight:600; margin-bottom:12px; color:var(--text-primary);">Next Steps</div>
+        <div id="next-steps-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+      </div>
 
       <!-- Confirm dialog for borderline cases -->
       <div id="confirm-dialog">
@@ -1045,18 +1096,75 @@
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // File handling
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    function setFile(file) {
+    // ── Phase 4.3: Session Cache ──
+    const CACHE_KEY_PREFIX = "modifai_session_";
+    const CACHE_TTL_MS = 30 * 60 * 1000;
+    async function hashFile(arrayBuffer) {
+      const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+    function getCacheEntry(fileHash) {
+      try {
+        const raw = sessionStorage.getItem(CACHE_KEY_PREFIX + fileHash);
+        if (!raw) return null;
+        const entry = JSON.parse(raw);
+        if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+          sessionStorage.removeItem(CACHE_KEY_PREFIX + fileHash);
+          return null;
+        }
+        return entry;
+      } catch(e) { return null; }
+    }
+    function setCacheEntry(entry) {
+      try { sessionStorage.setItem(CACHE_KEY_PREFIX + entry.fileHash, JSON.stringify(entry)); } catch(e) {}
+    }
+    function pruneExpiredEntries() {
+      try {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith(CACHE_KEY_PREFIX)) {
+            const raw = sessionStorage.getItem(key);
+            if (!raw) continue;
+            try {
+              const entry = JSON.parse(raw);
+              if (Date.now() - entry.timestamp > CACHE_TTL_MS) sessionStorage.removeItem(key);
+            } catch(e) { sessionStorage.removeItem(key); }
+          }
+        }
+      } catch(e) {}
+    }
+    async function setFile(file) {
       if (!file || file.type !== "application/pdf") {
         alert("Please select a PDF file.");
         return;
       }
       selectedFile = file;
-      dropIcon.textContent = "âœ…";
+      dropIcon.textContent = "📄";
       dropTitle.textContent = "PDF loaded";
       dropSubtitle.textContent = "";
-      fileInfoEl.textContent = `${file.name}  Â·  ${(file.size / 1024).toFixed(0)} KB`;
+      fileInfoEl.textContent = `${file.name}  —  ${(file.size / 1024).toFixed(0)} KB`;
       fileInfoEl.style.display = "inline-flex";
       dropZone.classList.add("has-file");
+      
+      // Phase 4.3 Cache check
+      pruneExpiredEntries();
+      const arrayBuffer = await file.arrayBuffer();
+      const hash = await hashFile(arrayBuffer);
+      const cached = getCacheEntry(hash);
+      const cacheBanner = document.getElementById("cache-banner");
+      if (cached) {
+        cacheBanner.style.display = "block";
+        document.getElementById("btn-view-cache").onclick = () => renderResults(cached.lastValidationResult);
+        const mins = Math.floor((Date.now() - cached.timestamp) / 60_000);
+        document.getElementById("cache-banner-text").textContent = `Validated ${mins === 0 ? "just now" : mins + " minutes ago"}. You can run a fresh validation, or view the previous result.`;
+        // Store hash for later
+        window.currentFileHash = hash;
+      } else {
+        cacheBanner.style.display = "none";
+        window.currentFileHash = hash;
+      }
+      
       updateRunBtn();
     }
 
@@ -1382,10 +1490,34 @@
       return wTot > 0 ? wSum / wTot : 0;
     }
 
-    function decide(finalScore, intentVerdict) {
-      if (intentVerdict === "mismatch")
-        return { decision: "block", reason: "The document does not match your stated intent. Please upload a more relevant document, or update your goal description." };
-      if (finalScore >= 70 && intentVerdict === "match")
+    function decide(finalScore, intentVerdict, domain = "", lowOcrChunks = 0, totalChunks = 0) {
+      const steps = [];
+      if (intentVerdict === "mismatch") {
+        steps.push({ priority: "high", icon: "📄", action: domain ? `Upload a document specifically about "${domain}". The document you uploaded appears to cover a different topic.` : "Upload a document that matches your stated goal, or update your intent description to match this document." });
+        steps.push({ priority: "medium", icon: "✏️", action: "Edit your intent description to be more specific — include the exact domain and type of questions the assistant should answer." });
+        return { decision: "block", headline: "Document doesn't match your intent", reason: "The document does not appear to match what you said you want to build. Please upload a relevant document or update your intent description.", nextSteps: steps };
+      }
+      if (finalScore >= 70 && intentVerdict === "match") {
+        steps.push({ priority: "medium", icon: "✅", action: `Your document is ready. ${totalChunks > 0 ? `${totalChunks} chunk(s)` : "Content"} will be passed to the ModifAI dataset generator.` });
+        return { decision: "proceed", headline: "Document looks great — ready to proceed", reason: "Document quality and intent match both look good.", nextSteps: steps };
+      }
+      if (finalScore >= 45) {
+        if (intentVerdict === "partial") {
+          steps.push({ priority: "high", icon: "✏️", action: domain ? `Your document covers "${domain}" broadly. Narrow your intent description to the specific section or topic that matters most.` : "Narrow your intent description to the specific section of the document you want the assistant to focus on." });
+        }
+        if (lowOcrChunks > 0) {
+          steps.push({ priority: "high", icon: "🔄", action: `${lowOcrChunks} chunk(s) had low OCR confidence. Rescan at 300 DPI or higher with even lighting and no shadow across the text.` });
+        }
+        steps.push({ priority: "medium", icon: "📄", action: "If only part of the document is relevant, extract those pages into a new PDF and re-upload — this will improve both quality and intent match scores." });
+        const qualityNote = finalScore >= 60 ? "Document quality is acceptable but not ideal." : "Document quality is borderline — some pages may not be fully usable.";
+        const intentNote = intentVerdict === "partial" ? " Intent is a partial match — results may be less focused." : "";
+        return { decision: "confirm-with-user", headline: "Borderline result — your call", reason: `${qualityNote}${intentNote} You can proceed, but results may be lower quality than expected.`, nextSteps: steps };
+      }
+      if (lowOcrChunks > 0) steps.push({ priority: "high", icon: "🔄", action: "Rescan at 300 DPI or higher. Use a flatbed scanner if available. Ensure even lighting and no shadow across the page." });
+      steps.push({ priority: "high", icon: "📄", action: "If this document is a template or a summary, upload the full, completed version with all the content filled in." });
+      steps.push({ priority: "medium", icon: "🗜️", action: "Try re-exporting the PDF from the original application (Word: File → Save As → PDF). Some PDF printers produce poor-quality output." });
+      return { decision: "block", headline: "Document quality too low", reason: "Document quality is too low to produce reliable results. The document may be unreadable, too sparse, or corrupted by a poor scan.", nextSteps: steps };
+    }
         return { decision: "proceed", reason: "Document quality and intent match look great. Proceeding to the main ModifAI pipeline automatically." };
       if (finalScore >= 45)
         return { decision: "confirm-with-user", reason: `Quality score (${finalScore.toFixed(1)}/100) is borderline${intentVerdict === "partial" ? ", and intent is only a partial match" : ""}. Results may be lower quality than expected. Proceed anyway?` };
@@ -1410,11 +1542,36 @@
       logStream.innerHTML = "";
       progressBar.style.width = "0%";
 
+      const secondaryProgress = document.getElementById("secondary-progress");
       const emit = (stage, message, progress, detail) => {
         progressBar.style.width = (progress ?? 0) + "%";
-        updateStep(stage, message, detail, "active");
+        
+        // Phase 4.2: parse detail for page progress
+        let detailStr = detail;
+        if (typeof detail === "object" && detail !== null) {
+          if (detail.currentPage && detail.totalPages) {
+            let txt = `Page ${detail.currentPage} of ${detail.totalPages}`;
+            if (detail.estMs) txt += ` (est. ~${Math.ceil(detail.estMs/1000)}s remaining)`;
+            secondaryProgress.textContent = txt;
+            detailStr = null;
+          }
+        } else if (typeof detail === "string" && detail.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(detail);
+            if (parsed.currentPage && parsed.totalPages) {
+              let txt = `Page ${parsed.currentPage} of ${parsed.totalPages}`;
+              if (parsed.estMs) txt += ` (est. ~${Math.ceil(parsed.estMs/1000)}s remaining)`;
+              secondaryProgress.textContent = txt;
+              detailStr = null;
+            }
+          } catch(e){}
+        }
+        
+        if (progress === 100) secondaryProgress.textContent = "";
+
+        updateStep(stage, message, detailStr, "active");
         addLog(message, "active");
-        if (detail) addLog("  â†’ " + detail);
+        if (detailStr) addLog("  → " + detailStr);
         // Mark previous stages as done
         // Phase 2: populate intent expansion card when orchestrator emits it
         if (stage === "intent-check" && message && message.includes("Intent understood")) {
@@ -1422,8 +1579,8 @@
           const useCaseMatch = message.match(/Use case:\s*(.+)/);
           if (domainMatch) document.getElementById("exp-domain").textContent = domainMatch[1].trim();
           if (useCaseMatch) document.getElementById("exp-use-case").textContent = useCaseMatch[1].trim();
-          if (detail && detail.startsWith("Keywords:")) {
-            document.getElementById("exp-keywords").textContent = detail.replace("Keywords:", "").trim();
+          if (detailStr && typeof detailStr === "string" && detailStr.startsWith("Keywords:")) {
+            document.getElementById("exp-keywords").textContent = detailStr.replace("Keywords:", "").trim();
           }
           document.getElementById("intent-expansion-card").style.display = "block";
         }
@@ -1440,6 +1597,9 @@
       try {
         // â”€â”€ Load libraries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         emit("pdf-loading", "Loading librariesâ€¦", 2);
+        if (navigator.hardwareConcurrency <= 2 || (navigator.deviceMemory && navigator.deviceMemory <= 2)) {
+          addLog("Warning: This device may be too slow for fast OCR. Large scanned documents might take a few minutes.", "error");
+        }
         const [lib, Tesseract] = await Promise.all([
           loadPdfJs(),
           loadTesseract().catch(() => null)
@@ -1456,8 +1616,7 @@
         const t0 = performance.now();
 
         const pages = await loadAndClassifyPdf(fileBuffer, lib, (pageNum, total) => {
-          progressBar.style.width = (5 + Math.round((pageNum / total) * 20)) + "%";
-          updateStep("page-classification", `Classifying page ${pageNum}/${total}â€¦`, null, null, "active");
+          emit("page-classification", `Classifying page ${pageNum}/${total}…`, 5 + Math.round((pageNum / total) * 20), { currentPage: pageNum, totalPages: total });
         });
 
         timings.pdfLoad = performance.now() - t0;
@@ -1477,15 +1636,24 @@
         const ocrResults = new Map();
 
         if (ocrPages.length > 0 && Tesseract) {
+          let ocrTotalMs = 0;
           for (let i = 0; i < ocrPages.length; i++) {
+            const pageStart = performance.now();
             const ocrPage = ocrPages[i];
-            emit("ocr", `OCR: page ${ocrPage.pageNumber} (${i+1}/${ocrPages.length})â€¦`,
-              25 + Math.round(((i + 0.5) / ocrPages.length) * 20));
+            let estMs = undefined;
+            if (i > 0) {
+              const avgMs = ocrTotalMs / i;
+              estMs = avgMs * (ocrPages.length - i);
+            }
+            emit("ocr", `OCR: page ${ocrPage.pageNumber} (${i+1}/${ocrPages.length})…`,
+              25 + Math.round(((i + 0.5) / ocrPages.length) * 20),
+              { currentPage: i+1, totalPages: ocrPages.length, estMs });
             try {
               const canvas = await renderPageToCanvas(fileBuffer, ocrPage.pageNumber, lib, 2.0);
               preprocessCanvas(canvas);
               const result = await runOcrOnPage(canvas, ocrPage.pageNumber, Tesseract);
               ocrResults.set(ocrPage.pageNumber, result);
+              ocrTotalMs += (performance.now() - pageStart);
               addLog(`Page ${ocrPage.pageNumber} OCR: conf=${result.averageConfidence.toFixed(1)}%`, "done");
             } catch (err) {
               addLog(`Page ${ocrPage.pageNumber} OCR failed: ${err.message}`, "error");
@@ -1596,30 +1764,62 @@
         // â”€â”€ Step 7: Aggregate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         emit("aggregation", "Aggregating scoresâ€¦", 94);
         const finalScore = aggregateScore(scoredChunks);
-        const { decision, reason } = decide(finalScore, intentVerdict);
-        timings.total = performance.now() - totalStart;
+        // Phase 4.1: pass domain + OCR quality context to decide()
+        let domain = "";
+        const expDomainEl = document.getElementById("exp-domain");
+        if (expDomainEl) domain = expDomainEl.textContent;
+        const lowOcrChunks = scoredChunks.filter(c => c.extractionConfidence < 0.6).length;
+        const decisionResult = decide(finalScore, intentVerdict, domain, lowOcrChunks, scoredChunks.length);
 
-        updateStep("done", `Score: ${finalScore.toFixed(1)}/100 | Decision: ${decision}`, null, "done");
-        for (const s of STAGES) {
-          const el = document.getElementById(`step-${s.key}`);
-          if (el) { el.classList.remove("active"); el.classList.add("done"); }
+        // Collect all unique issues for display
+        const allIssues = [...new Set(scoredChunks.flatMap(c => c.issues).filter(i => i))];
+
+        timings.total = performance.now() - totalStart;
+        emit("done", `Done! Score: ${finalScore.toFixed(1)}/100 | Decision: ${decisionResult.decision}`, 100);
+
+        const resultData = {
+          finalScore, intentVerdict, intentSimilarity: similarity,
+          decision: decisionResult.decision, reason: decisionResult.reason, headline: decisionResult.headline, nextSteps: decisionResult.nextSteps,
+          pageBreakdown: { total: pages.length, textNative, imageOnly, mixed },
+          sampledChunks: sample.length, scoredChunks, timings,
+          allIssues
+        };
+
+        // Phase 4.3: Save to cache
+        if (window.currentFileHash) {
+          setCacheEntry({
+            fileHash: window.currentFileHash,
+            timestamp: Date.now(),
+            ocrResults: Array.from(ocrResults.values()),
+            allChunks,
+            lastValidationResult: resultData,
+            lastIntent: userIntent
+          });
         }
+        renderResults(resultData);
         progressBar.style.width = "100%";
         addLog(`âœ“ Done! Score: ${finalScore.toFixed(1)} | ${decision}`, "done");
 
         // â”€â”€ Render results â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        renderResults({
-          finalScore, intentVerdict, intentSimilarity: similarity, decision, reason,
+        // Phase 4.3: Save to cache
+        const resultData = {
+          finalScore, intentVerdict, intentSimilarity,
+          decision: decisionResult.decision, reason: decisionResult.reason, headline: decisionResult.headline, nextSteps: decisionResult.nextSteps,
           pageBreakdown: { total: pages.length, textNative, imageOnly, mixed },
           sampledChunks: sample.length, scoredChunks, timings,
-          allIssues: [...new Set(scoredChunks.flatMap(c => c.issues).filter(i => i))],
-        });
-
-
-      } catch (err) {
-        const isPreflight = err.isPreflight === true;
-        const userMsg = isPreflight ? err.message + " \u2014 " + err.actionableHint : "Unexpected error: " + err.message;
-        emit("error", userMsg, null, null);
+          allIssues
+        };
+        if (window.currentFileHash) {
+          setCacheEntry({
+            fileHash: window.currentFileHash,
+            timestamp: Date.now(),
+            ocrResults: Array.from(ocrResults.values()),
+            allChunks,
+            lastValidationResult: resultData,
+            lastIntent: userIntent
+          });
+        }
+        renderResults(resultData);
         for (const s of STAGES) {
           const el = document.getElementById(`step-${s.key}`);
           if (el && el.classList.contains("active")) el.classList.add("error-step");
@@ -1640,7 +1840,7 @@
     // Render results panel
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function renderResults(data) {
-      const { finalScore, intentVerdict, intentSimilarity, decision, reason,
+      const { finalScore, intentVerdict, intentSimilarity, decision, reason, headline, nextSteps,
               pageBreakdown, sampledChunks, scoredChunks, timings, allIssues } = data;
 
       resultsSec.style.display = "block";
@@ -1648,29 +1848,50 @@
 
       // Decision badge
       const decisionMap = {
-        "proceed": { emoji: "âœ…", label: "Proceed to Pipeline", cls: "proceed" },
-        "confirm-with-user": { emoji: "âš ï¸", label: "Needs Confirmation", cls: "confirm" },
-        "block": { emoji: "âŒ", label: "Blocked", cls: "block" }
+        "proceed": { emoji: "✅", label: "Proceed", cls: "proceed" },
+        "confirm-with-user": { emoji: "⚠️", label: "Review Required", cls: "confirm" },
+        "block": { emoji: "❌", label: "Blocked", cls: "block" }
       };
       const dm = decisionMap[decision];
       document.getElementById("result-header").innerHTML = `
         <div class="decision-badge ${dm.cls}">${dm.emoji} ${dm.label}</div>
+        <div style="font-size: 1.25rem; font-weight: 700; margin-top: 12px; color: var(--text-primary);">${headline || ""}</div>
       `;
 
       const reasonEl = document.getElementById("result-reason");
       reasonEl.textContent = reason;
       reasonEl.className = `result-reason ${decision === "proceed" ? "proceed" : decision === "confirm-with-user" ? "confirm" : "block"}-reason`;
 
+      // Next steps
+      const nextStepsSec = document.getElementById("next-steps-section");
+      const nextStepsList = document.getElementById("next-steps-list");
+      if (nextSteps && nextSteps.length > 0) {
+        nextStepsSec.style.display = "block";
+        nextStepsList.innerHTML = nextSteps.map((step, idx) => `
+          <div style="display:flex; gap:12px; background:var(--bg-secondary); padding:12px 16px; border-radius:8px; border:1px solid var(--border-color); align-items:flex-start;">
+            <div style="font-size:1.2rem; flex-shrink:0;">${step.icon}</div>
+            <div style="flex-grow:1;">
+              <div style="font-weight:600; font-size:0.85rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Step ${idx + 1}</div>
+              <div style="font-size:0.95rem; color:var(--text-primary); line-height:1.4;">${step.action}</div>
+            </div>
+          </div>
+        `).join("");
+      } else {
+        nextStepsSec.style.display = "none";
+      }
+
       // Confirm dialog
       if (decision === "confirm-with-user") {
         confirmDialog.style.display = "block";
-        confirmText.textContent = reason;
+        confirmText.textContent = "Please review the feedback above before proceeding.";
         document.getElementById("btn-proceed-anyway").onclick = () => {
-          confirmDialog.innerHTML = `<div style="color:var(--accent2);font-weight:600;padding:10px 0">âœ… Confirmed â€” handing off to pipeline.</div>`;
+          confirmDialog.innerHTML = `<div style="color:var(--accent2);font-weight:600;padding:10px 0">✅ Confirmed — handing off to pipeline.</div>`;
         };
         document.getElementById("btn-cancel-proceed").onclick = () => {
           confirmDialog.style.display = "none";
         };
+      } else {
+        confirmDialog.style.display = "none";
       }
 
       // Metrics
@@ -1678,88 +1899,66 @@
       const gradeColor = { A:"score-a", B:"score-b", C:"score-c", D:"score-d", F:"score-f" }[scoreGrade];
       const intentLabel = intentVerdict === "match" ? "Strong Match" : intentVerdict === "partial" ? "Partial" : "Mismatch";
       const intentColor = intentVerdict === "match" ? "score-a" : intentVerdict === "partial" ? "score-c" : "score-f";
-      const ocrChunks = scoredChunks.filter(c => c.extractionConfidence < 1.0);
-      const avgOcr = ocrChunks.length > 0 ? (ocrChunks.reduce((s,c) => s + c.extractionConfidence, 0) / ocrChunks.length * 100).toFixed(0) : null;
 
       document.getElementById("metrics-grid").innerHTML = `
         <div class="metric-card">
-          <div class="metric-value ${gradeColor}">${finalScore.toFixed(0)}<span style="font-size:0.9rem">/100</span></div>
-          <div class="metric-label">Quality Score</div>
+          <div class="metric-title">Quality Score</div>
+          <div class="metric-value ${gradeColor}">${finalScore.toFixed(0)}</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" style="font-size:1.4rem" class="${intentColor}">${intentLabel}</div>
-          <div class="metric-label">Intent Match</div>
+          <div class="metric-title">Intent Match</div>
+          <div class="metric-value ${intentColor}">${intentLabel}</div>
+          <div class="metric-sub">Similarity: ${(intentSimilarity || 0).toFixed(2)}</div>
         </div>
-        <div class="metric-card">
-          <div class="metric-value" style="color:var(--primary-light)">${(intentSimilarity * 100).toFixed(0)}%</div>
-          <div class="metric-label">Embed Similarity</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-value" style="color:var(--text-secondary)">${pageBreakdown.total}</div>
-          <div class="metric-label">Total Pages</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-value" style="color:var(--text-secondary)">${sampledChunks}</div>
-          <div class="metric-label">Chunks Sampled</div>
-        </div>
-        ${avgOcr !== null ? `<div class="metric-card"><div class="metric-value" style="color:var(--warn)">${avgOcr}%</div><div class="metric-label">Avg OCR Conf.</div></div>` : ""}
       `;
 
-      // Breakdown bar
-      const total = pageBreakdown.total || 1;
-      const tnPct = (pageBreakdown.textNative / total * 100).toFixed(1);
-      const ioPct = (pageBreakdown.imageOnly / total * 100).toFixed(1);
-      const mxPct = (pageBreakdown.mixed / total * 100).toFixed(1);
-      document.getElementById("breakdown-bar").innerHTML = `
-        <div class="breakdown-segment seg-text" style="width:${tnPct}%"></div>
-        <div class="breakdown-segment seg-image" style="width:${ioPct}%"></div>
-        <div class="breakdown-segment seg-mixed" style="width:${mxPct}%"></div>
-      `;
-      document.getElementById("breakdown-legend").innerHTML = `
-        <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>${pageBreakdown.textNative} Text-native (${tnPct}%)</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>${pageBreakdown.imageOnly} Image-only (${ioPct}%)</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>${pageBreakdown.mixed} Mixed (${mxPct}%)</div>
-      `;
+      // Breakdown
+      const totalP = pageBreakdown.total;
+      if (totalP > 0) {
+        const tp = (pageBreakdown.textNative / totalP) * 100;
+        const ip = (pageBreakdown.imageOnly / totalP) * 100;
+        const mp = (pageBreakdown.mixed / totalP) * 100;
+        document.getElementById("breakdown-bar").innerHTML = `
+          ${tp > 0 ? `<div class="bar-segment bar-text" style="width:${tp}%"></div>` : ""}
+          ${mp > 0 ? `<div class="bar-segment bar-mixed" style="width:${mp}%"></div>` : ""}
+          ${ip > 0 ? `<div class="bar-segment bar-image" style="width:${ip}%"></div>` : ""}
+        `;
+        document.getElementById("breakdown-legend").innerHTML = `
+          <span><span class="legend-dot dot-text"></span> ${pageBreakdown.textNative} Text-native</span>
+          <span><span class="legend-dot dot-mixed"></span> ${pageBreakdown.mixed} Mixed</span>
+          <span><span class="legend-dot dot-image"></span> ${pageBreakdown.imageOnly} Image-only</span>
+        `;
+      }
 
-      // Chunk table
+      // Chunks table
       const tbody = document.getElementById("chunk-tbody");
-      tbody.innerHTML = scoredChunks.map(c => {
-        const scoreColor = c.qualityScore >= 70 ? "#34d399" : c.qualityScore >= 50 ? "#f59e0b" : "#ef4444";
-        const confPct = (c.extractionConfidence * 100).toFixed(0);
-        return `<tr>
-          <td>${c.chunkId}</td>
-          <td>${c.extractionConfidence < 1.0 ? "ðŸ”Ž OCR" : "ðŸ“„ Text"}</td>
-          <td style="color:${scoreColor};font-weight:600">${c.qualityScore}</td>
-          <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${c.qualityScore}%"></div></div></td>
-          <td>${confPct}%</td>
-        </tr>`;
-      }).join("");
+      tbody.innerHTML = scoredChunks.map(c => `
+        <tr>
+          <td style="font-family:monospace">${c.chunkId}</td>
+          <td>${c.extractionConfidence === 1 ? "Native" : "OCR"}</td>
+          <td>${c.qualityScore}</td>
+          <td><div style="width:100%;background:var(--bg-secondary);height:8px;border-radius:4px"><div style="width:${c.qualityScore}%;background:var(--accent1);height:100%;border-radius:4px"></div></div></td>
+          <td>${c.extractionConfidence === 1 ? "-" : (c.extractionConfidence*100).toFixed(0)+"%"}</td>
+        </tr>
+      `).join("");
 
       // Issues
-      if (allIssues.length > 0) {
+      if (allIssues && allIssues.length > 0) {
         document.getElementById("issues-section").style.display = "block";
-        document.getElementById("issues-list").innerHTML = allIssues.map(i =>
-          `<div class="issue-item"><span class="issue-icon">âš </span>${i}</div>`
-        ).join("");
+        document.getElementById("issues-list").innerHTML = allIssues.map(i => `<li>${i}</li>`).join("");
+      } else {
+        document.getElementById("issues-section").style.display = "none";
       }
 
       // Timings
-      const timingItems = [
-        { label: "PDF Load", ms: timings.pdfLoad },
-        { label: "OCR", ms: timings.ocr },
-        { label: "Chunking", ms: timings.chunking },
-        { label: "Intent Check", ms: timings.intentCheck },
-        { label: "Quality Score", ms: timings.qualityScoring },
-        { label: "Total", ms: timings.total },
-      ];
-      document.getElementById("timings-grid").innerHTML = timingItems.map(t => `
-        <div class="timing-item">
-          <div class="timing-value">${t.ms < 1000 ? t.ms.toFixed(0) + "ms" : (t.ms/1000).toFixed(1) + "s"}</div>
-          <div class="timing-label">${t.label}</div>
-        </div>
-      `).join("");
-
-      resetBtn.style.display = "inline-block";
+      document.getElementById("timings-grid").innerHTML = `
+        <div class="timing-item"><span>PDF Load</span><span>${(timings.pdfLoad/1000).toFixed(2)}s</span></div>
+        <div class="timing-item"><span>OCR</span><span>${(timings.ocr/1000).toFixed(2)}s</span></div>
+        <div class="timing-item"><span>Chunking</span><span>${(timings.chunking/1000).toFixed(2)}s</span></div>
+        <div class="timing-item"><span>Intent Check</span><span>${(timings.intentCheck/1000).toFixed(2)}s</span></div>
+        <div class="timing-item"><span>Quality Scoring</span><span>${(timings.qualityScoring/1000).toFixed(2)}s</span></div>
+        <div class="timing-item" style="font-weight:bold;color:var(--text-primary)"><span>Total</span><span>${(timings.total/1000).toFixed(2)}s</span></div>
+      `;
     }
 
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

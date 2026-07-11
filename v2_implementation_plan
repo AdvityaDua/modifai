@@ -1,0 +1,486 @@
+# ModifAI Input Validation — V2 Build Plan
+
+> **Core pillars:** User Experience · Accuracy · Efficiency  
+> **Target users:** Small businesses, startups, researchers, developers  
+> **Scope:** All 10 identified problems + intent refinement + chunk quality validation
+
+---
+
+## How to read this plan
+
+Each phase is a deployable increment — Phase 1 must ship before Phase 2 starts.
+Within each phase, modules are ordered by dependency.
+Every change lists: *what changes*, *where*, and *exactly why*.
+
+---
+
+## Phase 1 — Defensive Foundation
+*Fix everything that silently breaks the experience before the user gets any value.*
+
+### 1.1 — PDF Pre-flight Validation (NEW module: `pdfGuard.ts`)
+
+**Problem solved:** Corrupted PDFs, password-protected files, XPS-renamed-as-PDF, files >100MB all currently produce cryptic JS errors or hang silently.
+
+**What to build:**
+```
+src/pdfGuard.ts
+```
+
+Run this synchronously *before* passing the file to pdf.js. It checks:
+
+1. **Magic bytes check** — read the first 5 bytes of the `ArrayBuffer`. A valid PDF starts with `%PDF-`. If not, reject immediately with: *"This file doesn't appear to be a valid PDF. Try re-exporting from your original application."*
+2. **Password protection check** — pdf.js throws a specific `PasswordException` on encrypted files. Catch it explicitly and return: *"This PDF is password-protected. Remove the password in your PDF viewer (File → Security → Remove Password) and re-upload."*
+3. **File size gate** — if `file.size > 100 * 1024 * 1024`, reject with: *"This file is over 100MB. Try compressing it or splitting it into chapters."*
+4. **Page count sanity** — after loading, if `pdf.numPages === 0`, reject with: *"This PDF appears to be empty."*
+5. **Minimum content check** — if total extractable text across all pages is under 50 characters AND no pages have image ops, the PDF is likely a blank export. Warn: *"This document appears to have no content. Double-check you exported the right file."*
+
+**Return type:**
+```typescript
+type PrefightResult =
+  | { ok: true; pageCount: number }
+  | { ok: false; reason: string; actionableHint: string };
+```
+
+The `actionableHint` field is what gets shown in the UI — always one specific, concrete thing the user can do.
+
+**Integration point:** Call `pdfGuard()` as the very first step in `browserOrchestrator.ts`, before `loadAndClassifyPdf()`. If `ok: false`, display the error card immediately and abort — do not run any further stages.
+
+---
+
+### 1.2 — Language Detection (NEW module: `languageDetector.ts`)
+
+**Problem solved:** Non-English documents produce near-zero OCR confidence and get blocked as "low quality" with no useful explanation.
+
+**What to build:**
+```
+src/languageDetector.ts
+```
+
+**Approach — free, no API:**
+Use the `franc` library (MIT licensed, runs in browser, no API key, ~400KB). It identifies language from a text sample with reasonable accuracy.
+
+```bash
+npm install franc
+```
+
+**Logic:**
+1. After text extraction (Module A), take the first 500 characters of extractable text from the first 3 pages.
+2. Run `franc(sampleText)` — returns an ISO 639-3 language code.
+3. Map to a human language name and a Tesseract language pack code.
+
+**Supported language packs to configure in Tesseract.js:**
+
+| User language | Tesseract code |
+|---|---|
+| English | `eng` |
+| Hindi | `hin` |
+| Spanish | `spa` |
+| French | `fra` |
+| German | `deu` |
+| Portuguese | `por` |
+| Chinese (Simplified) | `chi_sim` |
+| Arabic | `ara` |
+
+**UI behaviour:**
+- If detected language ≠ English: show a small info banner: *"Document detected as [Language]. OCR will run in [Language] mode."*
+- If detected language is unsupported: warn (don't block): *"We couldn't identify the document's language. OCR may be less accurate — results may vary."*
+- User can also manually override the language from a dropdown before running.
+
+**Integration point:** Call `detectLanguage()` during the PDF loading stage (Module A), pass the detected language code to `runOcrOnPage()` in Module B.
+
+---
+
+### 1.3 — Data Transparency Banner (UI change, `index.html`)
+
+**Problem solved:** Developers and researchers will not upload sensitive internal documents without knowing what leaves their browser.
+
+**What to add:**
+
+A non-dismissable info section that appears *above* the upload zone:
+
+```
+🔒 What stays in your browser:
+   • Your PDF file — never uploaded to any server
+   • OCR processing — runs on your device via WebAssembly
+   • Semantic matching — local AI model, no API call
+
+☁ What is sent to OpenRouter (only when needed):
+   • Short text excerpts (≤2000 chars per chunk) for quality scoring
+   • Your intent description for borderline matching
+   These excerpts are not stored by ModifAI.
+   OpenRouter's data policy: openrouter.ai/privacy
+```
+
+**Implementation:** Static HTML, no JS needed. Style it as a subtle collapsed accordion (click to expand) so it doesn't dominate the screen but is always accessible.
+
+---
+
+## Phase 2 — Intent Intelligence
+*Make the intent pipeline robust enough to handle real users who don't know how to write good prompts.*
+
+### 2.1 — Vague Intent Detection + Clarification Flow (MODIFY `intentClassifier.ts`)
+
+**Problem solved:** Users typing "make it smart" or "chatbot" get meaningless validation results.
+
+**Vagueness detector — deterministic, free:**
+
+Before any embedding or LLM call, run a simple heuristic check on the raw intent string:
+
+```typescript
+function isIntentVague(intent: string): { vague: boolean; reason: string } {
+  const trimmed = intent.trim();
+
+  // Too short
+  if (trimmed.split(" ").length < 4)
+    return { vague: true, reason: "too_short" };
+
+  // Generic single-word category (no domain specifics)
+  const genericTerms = ["chatbot", "assistant", "ai", "smart", "helpful",
+                        "automation", "tool", "bot", "system"];
+  const words = trimmed.toLowerCase().split(/\s+/);
+  const isAllGeneric = words.every(w => genericTerms.includes(w));
+  if (isAllGeneric)
+    return { vague: true, reason: "all_generic" };
+
+  // No noun phrase (very rough heuristic — no word longer than 4 chars)
+  const hasSubstantiveWord = words.some(w => w.length > 4 && !genericTerms.includes(w));
+  if (!hasSubstantiveWord)
+    return { vague: true, reason: "no_domain" };
+
+  return { vague: false, reason: "" };
+}
+```
+
+**UI response to vague intent:**
+
+Don't block the user or show an error. Instead, show a suggestion panel beneath the intent field:
+
+```
+💡 Your intent is quite general. A more specific description
+   gives you more accurate results.
+
+   Instead of: "customer service chatbot"
+   Try:        "a chatbot that handles product return requests
+                and shipping queries for an e-commerce store"
+
+   [ Use suggestion ] [ Keep mine ]
+```
+
+The "use suggestion" button triggers **Intent Expansion** (2.2 below). "Keep mine" proceeds with the original.
+
+**This is triggered before any pipeline stage runs** — the user sees this before clicking "Run Validation."
+
+---
+
+### 2.2 — Intent Expansion & Structured Representation (MODIFY `intentClassifier.ts`)
+
+**Problem solved:** Weak embedding comparison caused by underspecified intents. Also surfaces the "I want X but uploaded Y" problem before compute is spent.
+
+**What to add:**
+
+One LLM call at the very start of the pipeline (before OCR, before chunking). Budget: ~150 tokens in, ~200 tokens out. Cost: < $0.001.
+
+**Prompt:**
+```
+A user wants to build an AI assistant. Their description:
+"[USER_INTENT]"
+
+Expand this into a structured JSON object:
+{
+  "domain": "the specific subject area (e.g. HR policy, e-commerce returns, Python API docs)",
+  "use_case": "what the assistant will do for the end user",
+  "expected_content_types": ["list of content types the source document should contain"],
+  "refined_query": "a single, specific sentence describing what an ideal source document looks like",
+  "document_keywords": ["5-8 keywords likely to appear in a matching document"]
+}
+
+Respond ONLY with valid JSON.
+```
+
+**What to do with the result:**
+
+1. **Show the user** (this is critical for UX): Display a card *"Here's what we understood:"* with the domain, use case, and expected content. Include an **Edit** button so the user can correct misinterpretations.
+2. **Use `refined_query` for embedding** instead of the raw intent string. This is the accuracy improvement.
+3. **Use `document_keywords`** in Phase 3 for relevance-weighted sampling (keywords get matched against chunk text as a fast pre-filter).
+
+**Caching:** Hash the raw intent string. If the same intent is re-submitted within the session, skip the LLM call and reuse the expanded object.
+
+---
+
+### 2.3 — Document Type Detection (NEW: add to `pdfLoader.ts`)
+
+**Problem solved:** Code documentation, statistical research papers, and legal contracts get incorrectly penalized by a quality rubric calibrated for narrative prose.
+
+**What to add:**
+
+After text extraction, classify the document's content type using a simple heuristic (no LLM needed):
+
+```typescript
+type DocumentType = "prose" | "technical-code" | "statistical" | "legal" | "mixed";
+
+function detectDocumentType(extractedText: string): DocumentType {
+  const text = extractedText.toLowerCase();
+  const codeSignals = (text.match(/```|function |def |const |import |class |return |=>|{|}/g) || []).length;
+  const statSignals = (text.match(/p\s*[<>]\s*0\.\d|mean|std|n\s*=\s*\d|figure \d|table \d|\bp-value\b/g) || []).length;
+  const legalSignals = (text.match(/whereas|hereinafter|notwithstanding|pursuant|indemnif/g) || []).length;
+  const total = Math.max(codeSignals + statSignals + legalSignals, 1);
+
+  if (codeSignals / total > 0.5) return "technical-code";
+  if (statSignals / total > 0.4) return "statistical";
+  if (legalSignals / total > 0.4) return "legal";
+  if (codeSignals + statSignals + legalSignals > 20) return "mixed";
+  return "prose";
+}
+```
+
+**How document type changes downstream behaviour:**
+
+| Type | Quality scoring prompt adjustment | Intent check adjustment |
+|---|---|---|
+| `prose` | Standard rubric | Standard |
+| `technical-code` | Rubric changes: values structure, completeness, example coverage. Ignores "readability" as prose | Similarity threshold lowered to 0.35 (technical terms are sparse in embeddings) |
+| `statistical` | Values data completeness, defined variables, methodology. Ignores "grounding in plain English" | Standard |
+| `legal` | Values clause completeness, defined terms, numbered structure | Standard |
+| `mixed` | Run both rubrics, take the max score | Lowered threshold |
+
+Pass `documentType` to `scoreChunkQuality()` and `checkIntentMatch()`.
+
+---
+
+## Phase 3 — Chunk Quality & Smart Sampling
+*Fix the empty chunk problem and the holistic-document / niche-query mismatch.*
+
+### 3.1 — Minimum Quality Filter (MODIFY `chunker.ts`)
+
+**Problem solved:** Short, low-information chunks (page numbers, headers, table of contents lines, single-sentence footers) pollute the sample and skew quality scores downward.
+
+**Add before any chunk is pushed to the array:**
+
+```typescript
+const MIN_CHUNK_WORDS = 20;      // Fewer than 20 words is almost never meaningful content
+const MIN_CHUNK_CHARS = 100;     // Absolute floor
+const TOC_PATTERN = /^(\d+\.?\s{1,5}.{3,60}\s+\d{1,4}\s*)+$/m; // "1. Introduction ... 12"
+const HEADER_ONLY_PATTERN = /^[A-Z][A-Z\s]{0,40}$/;             // "CHAPTER THREE"
+const PAGE_NUMBER_PATTERN = /^\s*\d{1,4}\s*$/;                   // Just a number
+
+function isSubstantiveChunk(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < MIN_CHUNK_CHARS) return false;
+  if (trimmed.split(/\s+/).length < MIN_CHUNK_WORDS) return false;
+  if (TOC_PATTERN.test(trimmed)) return false;
+  if (HEADER_ONLY_PATTERN.test(trimmed)) return false;
+  if (PAGE_NUMBER_PATTERN.test(trimmed)) return false;
+  return true;
+}
+```
+
+**Log every filtered chunk** with the reason — this is what the user was asking for with the console log request.
+
+---
+
+### 3.2 — Relevance-Weighted Sampling (MODIFY `chunker.ts` + `intentClassifier.ts`)
+
+**Problem solved:** Large holistic documents where only a fraction of pages are relevant to the stated intent. Random/positional sampling misses the relevant content.
+
+**New sampling strategy** — replaces the current purely positional `stratifiedSample()`:
+
+```
+Step 1: Keyword pre-filter (free)
+  - Take document_keywords from the expanded intent (Phase 2.2)
+  - Score each chunk: count how many keywords appear in it
+  - Rank chunks by keyword hit count
+
+Step 2: Hybrid selection
+  - Take the top ceil(sampleCount * 0.6) chunks by keyword relevance
+  - Take the remaining ceil(sampleCount * 0.4) chunks by stratified position
+    (to ensure beginning/middle/end representation)
+  - Deduplicate, return final sample
+
+Step 3: If no keywords match anything (completely off-topic document)
+  - Fall back to pure stratified sampling
+  - This case will correctly score as low intent match anyway
+```
+
+**Why not pure embedding-based selection?** Embedding every chunk before sampling is expensive (CPU-heavy, slow for large docs). Keyword matching is instant and catches 80% of the relevance signal. Embeddings run only on the final selected sample — same as today.
+
+**Update `stratifiedSample()` signature:**
+```typescript
+function stratifiedSample(
+  allChunks: Chunk[],
+  intentKeywords: string[]   // NEW parameter, from expanded intent
+): Chunk[]
+```
+
+---
+
+### 3.3 — LLM Chunk Quality Gating (MODIFY `qualityValidator.ts`)
+
+**Problem solved:** LLM quality scoring calls being wasted on chunks that are low-quality for obvious, deterministic reasons (garbled OCR, near-duplicate boilerplate).
+
+**Two-stage chunk validation:**
+
+**Stage A — Deterministic pre-filter (free):**
+Before sending a chunk to the LLM, check:
+- OCR confidence < 40%? → auto-score as 20, flag as "poor scan quality", skip LLM call
+- Ratio of non-ASCII characters > 30%? → likely garbled OCR, auto-score as 15, skip LLM call
+- Chunk is >80% similar to another already-scored chunk? (simple Jaccard on word sets) → mark as duplicate, reuse the score, skip LLM call
+
+**Stage B — LLM scoring (only for chunks that pass Stage A):**
+- Pass `documentType` to adjust the rubric (from Phase 2.3)
+- Increase `max_tokens` to 250 to allow better issue descriptions
+- Add to the prompt: *"If this is a non-prose document (code, data tables, formulas), evaluate for its format, not for narrative readability."*
+
+**Updated return type:**
+```typescript
+interface ChunkValidationResult {
+  score: number;           // 0-100
+  issues: string[];        // Specific problems found
+  skippedLLM: boolean;     // True if auto-scored
+  skipReason?: string;     // "low_ocr" | "garbled" | "duplicate"
+  actionableHint: string;  // NEW: what the user should do about this specific issue
+}
+```
+
+---
+
+## Phase 4 — UX & Experience Layer
+*The accuracy improvements from Phases 2–3 are worthless if users don't understand or trust the results.*
+
+### 4.1 — Actionable Feedback Engine (MODIFY `aggregator.ts` + UI)
+
+**Problem solved:** Users see a score and a decision with no idea what to do next.
+
+**New `decide()` return type:**
+```typescript
+interface DecisionResult {
+  decision: "proceed" | "confirm-with-user" | "block";
+  headline: string;         // Short, plain English verdict
+  reason: string;           // Why this decision was made
+  nextSteps: NextStep[];    // NEW
+}
+
+interface NextStep {
+  priority: "high" | "medium";
+  action: string;           // One specific, concrete thing the user can do
+}
+```
+
+**Decision → next step mapping:**
+
+| Situation | Next Step shown |
+|---|---|
+| Blocked: intent mismatch | "Upload a document specifically about [domain from expanded intent]. You uploaded something about [detected topic]." |
+| Blocked: poor scan quality | "Rescan at 300 DPI or higher. If scanning from a phone, ensure even lighting and no shadow across the text." |
+| Blocked: too sparse | "This document may be a template or a summary. Upload the full, completed version." |
+| Borderline: mixed quality | "The pages from [range] scored well. Consider extracting just those pages and re-uploading if the rest of the document isn't relevant." |
+| Borderline: partial intent | "Your document covers [detected domain] broadly. Narrow your intent to match: try '[specific refined intent suggestion]'." |
+| Proceed | "Your document is ready. [N] chunks will be passed to the dataset generator." |
+
+**UI presentation:** Show next steps as a numbered action list below the score, not buried in a paragraph. Each step has an icon (🔄 rescan, 📄 re-export, ✏️ edit intent, etc.).
+
+---
+
+### 4.2 — Granular Per-Page Progress (MODIFY UI in `index.html`)
+
+**Problem solved:** Large documents freeze the UI with no feedback for extended periods.
+
+**What to build:**
+
+Replace the current 9-stage progress bar with a two-level progress system:
+
+**Level 1 — Stage progress** (existing, keep it):
+Stage icons marking each module complete.
+
+**Level 2 — Within-stage page counter** (NEW):
+Below the current progress bar, add a secondary line that updates per page:
+```
+📂 Loading PDF...  Page 12 of 47 classified  ████████░░░░░░░ 26%
+```
+
+**Implementation:**
+- The `onProgress` callback already exists in `loadAndClassifyPdf()` — it just isn't connected to the UI.
+- Wire `emit()` calls from the orchestrator to include `{ currentPage, totalPages }` metadata.
+- Update the UI to render this secondary counter.
+
+**Additionally:** Show estimated time remaining for OCR stages:
+```
+👁 OCR running...  Page 3 of 8  (est. ~14 seconds remaining)
+```
+Time estimate = `(avg time per page so far) × (remaining pages)`. Start computing after the first OCR page completes.
+
+---
+
+### 4.3 — Session Content Hash & Re-upload Detection (NEW: `sessionCache.ts`)
+
+**Problem solved:** Re-uploading a slightly modified document runs the full expensive pipeline again.
+
+**What to build:**
+```
+src/sessionCache.ts
+```
+
+**Logic:**
+1. When a file is selected, compute a fast hash of its content using `SubtleCrypto.digest("SHA-256", arrayBuffer)` (browser-native, free, fast).
+2. Check `sessionStorage` for a cached result with this hash.
+3. If found: show a banner — *"We validated a very similar document 8 minutes ago. [View previous result] or [Run fresh validation]."*
+4. If the user modifies intent but re-uses the same document, run the full pipeline (intent changed) but skip the OCR stage (document unchanged) using the cached OCR results.
+
+**What to cache in `sessionStorage`:**
+```typescript
+interface SessionCacheEntry {
+  fileHash: string;
+  timestamp: number;
+  ocrResults: OcrResult[];      // Reusable across intent changes
+  allChunks: Chunk[];           // Reusable across intent changes
+  lastValidationResult: ValidationResult;
+}
+```
+
+**Cache expiry:** 30 minutes. After that, clear it automatically (documents may have been updated).
+
+---
+
+### 4.4 — Mobile Layout (CSS changes in `index.html`)
+
+**Problem solved:** Broken layout and interaction on mobile devices.
+
+**Key changes:**
+1. **Drop zone:** Replace drag-and-drop as the primary interaction with a large, obvious "Browse files" button. Drag-and-drop becomes secondary (still works on desktop, just not the hero interaction on mobile).
+2. **File input:** `<input type="file" accept=".pdf">` already works natively on mobile — ensure it's the primary tap target.
+3. **Layout:** Switch the two-column card layout to single-column below 768px. The intent input and result cards should stack vertically.
+4. **Tesseract warning on mobile:** If `navigator.hardwareConcurrency <= 2` or `navigator.deviceMemory <= 2` (low-end device), show a warning before OCR runs: *"OCR may be slow on this device. Large scanned documents may take a few minutes."*
+5. **Result tables:** The chunk score table is currently fixed-width. Make columns collapsible on mobile — show only Chunk ID and Score by default, expand to see full row.
+
+**No framework needed** — pure CSS media queries. Keep the existing design system, just make it responsive.
+
+---
+
+## Execution Order Summary
+
+| Phase | What ships | Estimated effort |
+|---|---|---|
+| **Phase 1** | PDF guard, language detection, transparency banner | Small — mostly new isolated modules |
+| **Phase 2** | Vague intent detection, intent expansion, document type detection | Medium — new LLM call, UI changes |
+| **Phase 3** | Chunk filter, relevance sampling, chunk quality gating | Medium — core algorithm changes |
+| **Phase 4** | Actionable feedback, page progress, session cache, mobile | Medium — mostly UI and plumbing |
+
+> Phase 1 and Phase 4.4 (mobile) can be worked on in parallel if you have two people.  
+> Phase 3 depends on `document_keywords` from Phase 2.2 — do not skip Phase 2.
+
+---
+
+## What does NOT change
+
+- The core cost architecture (free local checks first, LLM only when genuinely uncertain) — this stays
+- The sqrt-scaled sample count formula — this stays (the *selection strategy* changes, not the count)
+- The 0.4/0.7 similarity band — this stays as the default (document type detection in Phase 2.3 adjusts it per type)
+- The proceed/confirm/block decision framework — this stays (only the presentation of results changes)
+
+---
+
+## Open questions before building
+
+1. **Language support scope:** Which specific languages should ship in v2? Full list or a curated 5? This determines the Tesseract language pack download size.
+2. **Intent expansion LLM cost ownership:** This is one guaranteed LLM call per document (vs. zero currently for clear-match cases). Is that acceptable, or should it also be gated behind the vagueness check (only run for vague intents)?
+3. **Session cache storage:** `sessionStorage` dies on tab close. Should it persist to `localStorage` across sessions? This raises a question about storing document content on the user's machine.
+4. **Mobile OCR:** Tesseract WASM is ~15MB. On a slow mobile connection this is a bad first-load experience. Consider lazy-loading it only when the document actually needs OCR, rather than loading upfront.

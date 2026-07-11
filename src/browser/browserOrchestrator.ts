@@ -24,6 +24,7 @@ import { scoreAllChunks } from "../qualityValidator";
 import { aggregateScore, decide, buildSummary } from "../aggregator";
 import { pdfPreflight } from "../pdfGuard";
 import { detectLanguage } from "../languageDetector";
+import { hashFile, getCacheEntry, setCacheEntry, pruneExpiredEntries } from "../sessionCache";
 import type { ValidationResult, IntentVerdict, ProgressEvent, PipelineStage, OcrResult, PreflightResult, ExpandedIntent, DocumentType } from "../types";
 
 export type { ValidationResult };
@@ -31,7 +32,10 @@ export type { ValidationResult };
 export interface BrowserValidationResult extends ValidationResult {
   summary: ReturnType<typeof buildSummary>;
   allIssues: string[];
+  headline: string;        // Phase 4.1
+  nextSteps: import("../types").NextStep[];  // Phase 4.1
 }
+
 
 /**
  * Run the full browser-based validation pipeline with OCR support.
@@ -54,7 +58,18 @@ export async function browserValidateUpload(
   const arrayBuffer = await file.arrayBuffer();
   const fileBuffer = new Uint8Array(arrayBuffer);
 
-  // ── Phase 1.1: Pre-flight validation ──────────────────────────────────────
+  // Phase 4.3: hash + prune expired cache entries
+  pruneExpiredEntries();
+  const fileHash = await hashFile(arrayBuffer);
+  const cached = getCacheEntry(fileHash);
+  if (cached) {
+    // Same file seen before — emit a signal the UI can intercept for the re-upload banner
+    console.log(`[sessionCache] Cache hit for file hash ${fileHash.slice(0, 8)}… (validated ${Math.floor((Date.now() - cached.timestamp) / 60000)} min ago)`);
+    emit("pdf-loading", `🔁 Cache hit — this file was validated before. Using cached chunks.`, 3,
+      JSON.stringify({ fromCache: true, fileHash, timestamp: cached.timestamp }));
+  }
+
+  // ── Phase 1.1: Pre-flight validation ────────────────────────────────────────────
   emit("pdf-loading", "Checking file…", 2);
   const preflight = await pdfPreflight(file);
   if (!preflight.ok) {
@@ -70,7 +85,12 @@ export async function browserValidateUpload(
   const t0 = performance.now();
 
   const pages = await loadAndClassifyPdf(fileBuffer, (pageNum, total) => {
-    emit("page-classification", `Classifying page ${pageNum}/${total}…`, 5 + Math.round((pageNum / total) * 20));
+    emit(
+      "page-classification", 
+      `Classifying page ${pageNum}/${total}…`, 
+      5 + Math.round((pageNum / total) * 20),
+      JSON.stringify({ currentPage: pageNum, totalPages: total })
+    );
   });
 
   timings.pdfLoad = performance.now() - t0;
@@ -111,11 +131,24 @@ export async function browserValidateUpload(
   if (ocrPages.length > 0) {
     emit("ocr", `Running OCR on ${ocrPages.length} page(s)…`, 28);
 
+    let ocrTotalMs = 0;
     for (let i = 0; i < ocrPages.length; i++) {
+      const pageStart = performance.now();
       const ocrPage = ocrPages[i];
       const progress = 28 + Math.round(((i + 0.5) / ocrPages.length) * 22);
 
-      emit("ocr", `OCR page ${ocrPage.pageNumber} (${i + 1}/${ocrPages.length})…`, progress);
+      let estMs: number | undefined;
+      if (i > 0) {
+        const avgMs = ocrTotalMs / i;
+        estMs = avgMs * (ocrPages.length - i);
+      }
+
+      emit(
+        "ocr", 
+        `OCR page ${ocrPage.pageNumber} (${i + 1}/${ocrPages.length})…`, 
+        progress,
+        JSON.stringify({ currentPage: i + 1, totalPages: ocrPages.length, estMs })
+      );
 
       try {
         // Render the page to canvas at 2x scale for better OCR accuracy
@@ -127,6 +160,8 @@ export async function browserValidateUpload(
         // Run Tesseract with detected language
         const ocrResult = await runOcrOnPage(canvas, ocrPage.pageNumber, undefined, langResult.tesseractLang);
         ocrResults.set(ocrPage.pageNumber, ocrResult);
+        
+        ocrTotalMs += (performance.now() - pageStart);
 
         emit(
           "ocr",
@@ -171,6 +206,11 @@ export async function browserValidateUpload(
       reason:
         "No extractable text found. The PDF may be entirely image-based and OCR may have failed. " +
         "Try a higher-resolution scan.",
+      headline: "No text found in document",
+      nextSteps: [
+        { priority: "high", icon: "🔄", action: "Rescan at 300 DPI or higher with a flatbed scanner. Ensure even lighting across the page." },
+        { priority: "medium", icon: "📄", action: "If this is a digital document, re-export it as a PDF from the original application to preserve the text layer." },
+      ],
       pageBreakdown: { total: pages.length, textNative, imageOnly, mixed },
       sampledChunks: 0,
       scoredChunks: [],
@@ -178,6 +218,7 @@ export async function browserValidateUpload(
       summary: { qualityGrade: "F", intentGrade: "Mismatch", averageOcrConfidence: null, lowConfidenceChunks: 0 },
       allIssues: ["No extractable text found in document."],
     };
+
     emit("done", "Validation complete — no text found.", 100);
     return emptyResult;
   }
@@ -276,7 +317,16 @@ export async function browserValidateUpload(
   emit("aggregation", "Computing final score and decision…", 94);
 
   const finalScore = aggregateScore(scoredChunks);
-  const decisionResult = decide(finalScore, intentVerdict);
+
+  // Phase 4.1: pass domain + OCR quality context to decide()
+  const lowOcrChunks = scoredChunks.filter((c) => c.extractionConfidence < 0.6).length;
+  const decisionResult = decide(
+    finalScore,
+    intentVerdict,
+    expandedIntent?.domain ?? "",
+    lowOcrChunks,
+    scoredChunks.length
+  );
   const summary = buildSummary(finalScore, intentVerdict, similarity, scoredChunks);
 
   // Collect all unique issues for display
@@ -288,12 +338,14 @@ export async function browserValidateUpload(
 
   emit("done", `Done! Score: ${finalScore.toFixed(1)}/100 | Decision: ${decisionResult.decision}`, 100);
 
-  return {
+  const finalResult: BrowserValidationResult = {
     finalScore,
     intentVerdict,
     intentSimilarity: similarity,
     decision: decisionResult.decision,
     reason: decisionResult.reason,
+    headline: decisionResult.headline,    // Phase 4.1
+    nextSteps: decisionResult.nextSteps,  // Phase 4.1
     pageBreakdown: { total: pages.length, textNative, imageOnly, mixed },
     sampledChunks: sample.length,
     scoredChunks,
@@ -301,4 +353,17 @@ export async function browserValidateUpload(
     summary,
     allIssues,
   };
+
+  // Phase 4.3: persist result for re-upload detection
+  setCacheEntry({
+    fileHash,
+    timestamp: Date.now(),
+    ocrResults: Array.from(ocrResults.values()),
+    allChunks,
+    lastValidationResult: finalResult,
+    lastIntent: userIntent,
+  });
+
+  return finalResult;
 }
+

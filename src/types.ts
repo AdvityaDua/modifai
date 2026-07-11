@@ -71,7 +71,12 @@ export type Decision = "proceed" | "confirm-with-user" | "block";
 export interface DecisionResult {
   decision: Decision;
   reason: string;
+  /** Short plain-English verdict for the result card headline */
+  headline: string;
+  /** Ordered list of concrete things the user can do next */
+  nextSteps: NextStep[];
 }
+
 
 // ─── Module G: Orchestrator ─────────────────────────────────────────────────
 
@@ -180,4 +185,14 @@ export interface ChunkPreScreenResult {
   /** Human-readable reason shown in the issues list */
   skipReason: string;
 }
+
+// ─── Phase 4: Actionable Feedback ──────────────────────────────────────────────
+
+/** One concrete action the user can take to improve their result */
+export interface NextStep {
+  priority: "high" | "medium";
+  icon: string;   // emoji
+  action: string; // specific, imperative instruction
+}
+
 

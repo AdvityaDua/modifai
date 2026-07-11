@@ -8,7 +8,8 @@
  * Thresholds (70/45) are starting points — tune against real test documents.
  */
 
-import type { ScoredChunk, Decision, DecisionResult, IntentVerdict } from "./types";
+import type { ScoredChunk, Decision, DecisionResult, IntentVerdict, NextStep } from "./types";
+
 
 /**
  * Compute the confidence-weighted mean quality score.
@@ -44,49 +45,109 @@ export function aggregateScore(scoredChunks: ScoredChunk[]): number {
  */
 export function decide(
   finalScore: number,
-  intentVerdict: IntentVerdict
+  intentVerdict: IntentVerdict,
+  domain = "",              // Phase 4.1: from expandedIntent.domain, optional
+  lowOcrChunks = 0,         // Phase 4.1: count of chunks with low OCR confidence
+  totalChunks = 0
 ): DecisionResult {
-  // ── 1. Intent mismatch: hard block ─────────────────────────────────────────
+  const steps: NextStep[] = [];
+
+  // ── 1. Intent mismatch: hard block ────────────────────────────────────────────────
   if (intentVerdict === "mismatch") {
+    steps.push({
+      priority: "high",
+      icon: "📄",
+      action: domain
+        ? `Upload a document specifically about "${domain}". The document you uploaded appears to cover a different topic.`
+        : "Upload a document that matches your stated goal, or update your intent description to match this document.",
+    });
+    steps.push({
+      priority: "medium",
+      icon: "✏️",
+      action: "Edit your intent description to be more specific — include the exact domain and type of questions the assistant should answer.",
+    });
     return {
       decision: "block",
-      reason:
-        "The document does not appear to match what you said you want to build. " +
-        "Please upload a document that matches your stated intent, or update your intent description.",
+      headline: "Document doesn't match your intent",
+      reason: "The document does not appear to match what you said you want to build. Please upload a relevant document or update your intent description.",
+      nextSteps: steps,
     };
   }
 
-  // ── 2. High quality + clear intent match: auto-proceed ─────────────────────
+  // ── 2. High quality + clear intent: auto-proceed ───────────────────────────────
   if (finalScore >= 70 && intentVerdict === "match") {
+    steps.push({
+      priority: "medium",
+      icon: "✅",
+      action: `Your document is ready. ${totalChunks > 0 ? `${totalChunks} chunk(s)` : "Content"} will be passed to the ModifAI dataset generator.`,
+    });
     return {
       decision: "proceed",
-      reason: "Document quality and intent match both look good. Proceeding to the main pipeline.",
+      headline: "Document looks great — ready to proceed",
+      reason: "Document quality and intent match both look good.",
+      nextSteps: steps,
     };
   }
 
-  // ── 3. Borderline quality (with match or partial intent) ────────────────────
+  // ── 3. Borderline quality ────────────────────────────────────────────────────
   if (finalScore >= 45) {
+    if (intentVerdict === "partial") {
+      steps.push({
+        priority: "high",
+        icon: "✏️",
+        action: domain
+          ? `Your document covers "${domain}" broadly. Narrow your intent description to the specific section or topic that matters most.`
+          : "Narrow your intent description to the specific section of the document you want the assistant to focus on.",
+      });
+    }
+    if (lowOcrChunks > 0) {
+      steps.push({
+        priority: "high",
+        icon: "🔄",
+        action: `${lowOcrChunks} chunk(s) had low OCR confidence. Rescan at 300 DPI or higher with even lighting and no shadow across the text.`,
+      });
+    }
+    steps.push({
+      priority: "medium",
+      icon: "📄",
+      action: "If only part of the document is relevant, extract those pages into a new PDF and re-upload — this will improve both quality and intent match scores.",
+    });
     const qualityNote =
       finalScore >= 60
         ? "Document quality is acceptable but not ideal."
         : "Document quality is borderline — some pages may not be fully usable.";
-    const intentNote =
-      intentVerdict === "partial"
-        ? " The document intent is a partial match — results may be less focused."
-        : "";
+    const intentNote = intentVerdict === "partial" ? " Intent is a partial match — results may be less focused." : "";
     return {
       decision: "confirm-with-user",
-      reason: `${qualityNote}${intentNote} You can proceed anyway, but results may be lower quality than expected.`,
+      headline: "Borderline result — your call",
+      reason: `${qualityNote}${intentNote} You can proceed, but results may be lower quality than expected.`,
+      nextSteps: steps,
     };
   }
 
-  // ── 4. Low quality: block ───────────────────────────────────────────────────
+  // ── 4. Low quality: block ───────────────────────────────────────────────────────
+  if (lowOcrChunks > 0) {
+    steps.push({
+      priority: "high",
+      icon: "🔄",
+      action: "Rescan at 300 DPI or higher. Use a flatbed scanner if available. Ensure even lighting and no shadow across the page.",
+    });
+  }
+  steps.push({
+    priority: "high",
+    icon: "📄",
+    action: "If this document is a template or a summary, upload the full, completed version with all the content filled in.",
+  });
+  steps.push({
+    priority: "medium",
+    icon: "🗜️",
+    action: "Try re-exporting the PDF from the original application (Word: File → Save As → PDF). Some PDF printers produce poor-quality output.",
+  });
   return {
     decision: "block",
-    reason:
-      "Document quality is too low to produce reliable results. " +
-      "The document may be mostly unreadable, too sparse, or heavily corrupted by poor scanning. " +
-      "Please try a higher-quality scan or a different document.",
+    headline: "Document quality too low",
+    reason: "Document quality is too low to produce reliable results. The document may be unreadable, too sparse, or corrupted by a poor scan.",
+    nextSteps: steps,
   };
 }
 
