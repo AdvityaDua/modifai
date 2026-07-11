@@ -1,133 +1,94 @@
-# ModifAI — Step 1: Input Validation Module
+# ModifAI — Input Validation Module
 
-> **Intent Classification Agent + Data Quality Gate**
-> The first intelligent checkpoint in the ModifAI pipeline — runs before a single dollar of compute is spent on dataset generation, agent discovery, or fine-tuning.
-
----
-
-## The Problem We're Solving
-
-Most AI document pipelines are blind optimists — they accept whatever file the user uploads and immediately start burning compute. If the document is the wrong type, garbled, or barely readable, the model still runs, the dataset still generates, and the credits still disappear. The user gets a low-quality output and no explanation.
-
-Step 1 exists to stop that. Before ModifAI spends a single token on dataset generation or agent training, it answers two questions:
-
-- **Does this document match what the user actually wants to build?** A recipe PDF cannot produce a useful HR policy assistant, no matter how good the downstream model is.
-- **Is this document readable enough to build from?** A 200-page blurry scan with no real text layer will produce noisy, unreliable training data even if the topic is correct.
-
-The answers come from a layered, cost-minimising pipeline: free local checks run first on everything, and a paid LLM call only enters the picture when those checks are genuinely uncertain. On most documents, the whole validation costs nothing.
+**The intelligent checkpoint for AI pipelines.** This module runs *before* any dataset generation or agent fine-tuning begins. It acts as a strict data quality gate and intent classifier to ensure you never burn compute on garbage data.
 
 ---
 
-## The Architecture: Zero Server Cost by Design
+## 🛑 The Problem
 
-```
-User's Browser
-  ├── pdf.js          → Free text extraction, no upload needed
-  ├── Tesseract.js    → Free OCR via WebAssembly (runs on user's device, not our server)
-  └── Transformers.js → Free semantic embeddings (MiniLM, runs locally in-browser)
-       │
-       └─ Only if similarity is ambiguous (0.4–0.7 band):
-            └── OpenRouter LLM → 1 cheap API call for definitive verdict
+Most AI pipelines are blind optimists: they accept any document a user uploads and immediately start spending money (tokens and compute) to process it. 
+If the user uploads a blurry 200-page scan, or a recipe book when they asked for an HR assistant, the pipeline happily burns API credits only to produce a useless result.
 
-Server (Express)
-  └── Injects API key from environment → serves static HTML
-```
+## 🟢 Our Solution
 
-**The guiding principle: spend money only when a free check genuinely cannot decide.**
+**Spend money only when a free check genuinely cannot decide.**
+ModifAI's Input Validation Module intercepts the document and answers two critical questions:
+1. **Does this document match the user's stated intent?** 
+2. **Is the document readable and high enough quality to build from?**
+
+We use a layered, cost-minimizing architecture. Free, client-side local models handle the vast majority of the workload. Paid LLM calls are only used as a last resort for ambiguous cases and deep qualitative scoring.
 
 ---
 
-## Pipeline — 7 Stages
+## ✨ Key Features & Innovations
 
-| Stage | What Happens | Cost |
-|---|---|---|
-| **A — PDF Classification** | Every page classified as text-native, image-only, or mixed using pdf.js | Free |
-| **B — Selective OCR** | *Only* image-flagged pages rendered to canvas and processed by Tesseract.js WASM | Free (client CPU) |
-| **C — Semantic Chunking** | Text split on paragraph boundaries with √-scaled stratified sampling | Free |
-| **D — Intent Matching** | `all-MiniLM-L6-v2` embeds user intent vs. document sample; cosine similarity computed | Free |
-| **D — LLM Escalation** | If similarity is 0.4–0.7 (genuinely ambiguous), one LLM call gets a verdict | ~$0.001 |
-| **E — Quality Scoring** | LLM rates sampled chunks on specificity, grounding, and readability | ~$0.001/chunk |
-| **F — Aggregation** | Confidence-weighted mean score → `proceed` / `confirm-with-user` / `block` | Free |
-
----
-
-## Tech Stack Decisions
-
-| Tool | Purpose | Why specifically this |
-|---|---|---|
-| **pdf.js** (Mozilla) | PDF parsing + text-layer detection | Runs in the browser; no upload to a third-party server; detects text-native pages so OCR is never run unnecessarily |
-| **Tesseract.js** (WASM) | OCR for scanned pages | Zero server cost — compute runs on the user's device. Cloud OCR (AWS Textract, Google DocAI) charges per page; this charges nothing |
-| **`all-MiniLM-L6-v2`** via Transformers.js | Intent-document similarity | 384-dimensional embeddings that run fully in-browser. No API key, no latency, no cost for the majority of documents that are clearly matching or clearly not |
-| **OpenRouter** (`llama-3.1-8b`, `qwen-2.5-7b`) | LLM verdict + quality scoring | Aggregator access to cheap open-weight models. Only called for the genuinely ambiguous cases (~20–30% of uploads) |
-| **Express** | Serving the static app | Injects the API key from the server environment — the key is never in client code, never in the git history |
+- **Zero-Cost PDF Parsing:** Uses Mozilla's `pdf.js` to detect text-native vs. image-only pages instantly in the browser.
+- **Client-Side OCR:** Uses `Tesseract.js` (WebAssembly) to OCR scanned pages directly on the user's device. Eliminates expensive cloud OCR costs (like AWS Textract).
+- **Local Semantic Embeddings:** Uses `Transformers.js` (`all-MiniLM-L6-v2`) entirely in the browser to check document relevance against the user's intent.
+- **Smart Caching & Deduplication:** 
+  - **Jaccard Similarity Deduplication:** Prevents near-duplicate text chunks from being sent to the LLM, saving API costs and time.
+  - **OCR Caching:** If a user re-runs the same document with a refined intent, expensive OCR steps are automatically skipped.
+  - **Intent Caching:** Identical intent prompts hit a fast in-session cache to bypass redundant LLM expansion calls.
+- **Interactive UX:** Vagueness detection warns users if their prompt is too generic and offers one-click, AI-generated suggestions to improve it. The UI is fully responsive, featuring collapsible data tables for mobile devices.
 
 ---
 
-## Running Locally
+## 🏗️ Technical Architecture
 
+The module operates in a highly optimized 7-stage pipeline:
+
+| Stage | Action | Execution | Cost |
+|---|---|---|---|
+| **1. PDF Classification** | Scans pages to identify text-native vs. image-only pages. | Local (`pdf.js`) | **Free** |
+| **2. Selective OCR** | Runs OCR *only* on image-heavy pages. | Local (`Tesseract.js`) | **Free** |
+| **3. Semantic Chunking** | Splits text on natural paragraph boundaries and performs stratified sampling. | Local (JS logic) | **Free** |
+| **4. Intent Matching** | Compares chunk embeddings against user intent to ensure topic alignment. | Local (`Transformers.js`) | **Free** |
+| **5. LLM Escalation** | If local similarity is ambiguous (0.4–0.7), an LLM makes the final call. | API (`OpenRouter`) | ~$0.001 |
+| **6. Quality Scoring** | LLM rates sampled chunks on specificity, grounding, and readability. | API (`OpenRouter`) | ~$0.001 / chunk |
+| **7. Aggregation** | Computes a confidence-weighted score to `proceed`, `block`, or `confirm`. | Local (JS logic) | **Free** |
+
+---
+
+## 🚀 Running Locally
+
+### Prerequisites
+- Node.js (v18+)
+- An OpenRouter API Key (for the fallback LLM checks)
+
+### Setup
 ```bash
-# 1. Clone & install
+# 1. Clone & install dependencies
 git clone https://github.com/AdvityaDua/modifai.git
 cd modifai
 npm install
 
-# 2. Add your OpenRouter API key
+# 2. Configure Environment
 cp .env.example .env
-# Open .env and set: OPENROUTER_API_KEY=sk-or-...
+# Edit .env and add your key: OPENROUTER_API_KEY=sk-or-...
 
-# 3. Start
+# 3. Start the application
 npm start
-# → http://localhost:3000
 ```
 
-### Using the App
-1. Drop a PDF into the upload zone
-2. Type your intent (e.g. *"I want to build an HR policy assistant"*)
-3. Click **Run Validation**
-4. Watch the 7-stage pipeline run in real time — the final result tells you exactly why the document passed, needs confirmation, or was blocked
+### Usage
+1. Open `http://localhost:3000` in your browser.
+2. Drag and drop a PDF into the upload zone.
+3. Type your intent (e.g., *"I want an assistant to answer employee HR questions"*). If your intent is too vague, the UI will warn you and provide a better suggestion!
+4. Click **Run Validation**.
+5. Watch the real-time pipeline execute and view the final chunk scores, extracted issues, and overall verdict.
 
 ---
 
-## Acceptance Checklist (from Build Manual §13)
+## 🛡️ Security & Privacy
 
-- [ ] Text-native PDF → zero OCR calls, processed in milliseconds
-- [ ] Scanned PDF (matching intent) → OCR runs, confidence scores visible in results
-- [ ] Scanned PDF (poor quality) → blocked with specific reason
-- [ ] Mixed PDF → only the scanned page goes through Tesseract
-- [ ] Wrong-intent PDF → blocked for intent mismatch, not quality
-- [ ] Borderline case → "Proceed anyway?" confirmation shown to user
-- [ ] LLM spend: handful of calls per document, never one per chunk
+- **No API Keys in the Browser:** The Express server securely injects the API key at runtime. It is never exposed in the static HTML files or committed to the GitHub repository.
+- **Local-First Processing:** Documents are processed heavily on the client side, ensuring maximum privacy before any chunks are ever sent to an external LLM.
 
 ---
 
-## Project Structure
+## 🤝 Next Steps / Handoff
 
-```
-step1-input-validation/
-  server.js                       ← Express server (injects API key, serves static files)
-  index.html                      ← Browser demo UI (drag-and-drop, real-time pipeline)
-  render.yaml                     ← One-click Render deployment config
-  src/
-    types.ts                      ← Shared TypeScript interfaces for all modules
-    pdfLoader.ts                  ← Module A: PDF loading + page classification
-    ocrProcessor.ts               ← Module B: Tesseract.js OCR + image preprocessing
-    chunker.ts                    ← Module C: Semantic chunking + stratified sampling
-    intentClassifier.ts           ← Module D: MiniLM embeddings + LLM escalation
-    qualityValidator.ts           ← Module E: LLM quality scoring
-    aggregator.ts                 ← Module F: Confidence-weighted aggregation + decision
-    orchestrator.ts               ← Module G: Node.js entry point
-    browser/
-      browserOrchestrator.ts      ← Browser-specific pipeline (with canvas OCR)
-    test/
-      runValidation.ts            ← CLI test runner
-```
+When a document passes validation (decision: `proceed`), the parsed, scored, and source-tagged chunks are ready to be passed directly to the **ModifAI Dataset Generator** (Step 2 of the pipeline) with absolute confidence in the data quality and intent match.
 
 ---
-
-## What This Hands Off
-
-When `validateUpload()` returns `decision: "proceed"` (or the user confirms on a borderline case), the resulting chunks — already tagged with `source_type` and `confidence` — are passed directly to the LangChain/LangGraph orchestrator in Step 2.
-
----
-
-*Built for the ModifAI hackathon · Step 1 of the pipeline*
+*Built for the ModifAI Hackathon*
