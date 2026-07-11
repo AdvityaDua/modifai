@@ -119,3 +119,23 @@ export interface ProgressEvent {
   progress?: number; // 0–100
   detail?: string;
 }
+
+// ─── Phase 1: PDF Pre-flight ────────────────────────────────────────────────
+
+export type PreflightResult =
+  | { ok: true; pageCount: number }
+  | { ok: false; reason: string; actionableHint: string };
+
+// ─── Phase 1: Language Detection ────────────────────────────────────────────
+
+/** ISO 639-1 codes for languages supported by our Tesseract build */
+export type SupportedLang = "eng" | "hin" | "spa" | "fra" | "deu" | "por" | "chi_sim" | "ara";
+
+export interface LangDetectResult {
+  /** Tesseract language code to pass to runOcrOnPage */
+  tesseractLang: SupportedLang;
+  /** Human-readable name for the UI banner */
+  displayName: string;
+  /** True if we detected a specific supported language */
+  confident: boolean;
+}

@@ -48,12 +48,13 @@ export function preprocessCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
 export async function runOcrOnPage(
   canvas: HTMLCanvasElement,
   pageNumber: number,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number) => void,
+  lang = "eng"   // Phase 1.2: accepts detected language code
 ): Promise<OcrResult> {
   // Dynamic import so Node.js can load it when not in a browser context
   const { createWorker } = await import("tesseract.js");
 
-  const worker = await createWorker("eng", 1, {
+  const worker = await createWorker(lang, 1, {
     logger: onProgress
       ? (m: any) => {
           if (m.status === "recognizing text" && typeof m.progress === "number") {

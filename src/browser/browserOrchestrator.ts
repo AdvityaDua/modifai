@@ -22,7 +22,9 @@ import { buildAllChunks, stratifiedSample } from "../chunker";
 import { checkIntentMatch, llmIntentVerdict, similarityToVerdict } from "../intentClassifier";
 import { scoreAllChunks } from "../qualityValidator";
 import { aggregateScore, decide, buildSummary } from "../aggregator";
-import type { ValidationResult, IntentVerdict, ProgressEvent, PipelineStage, OcrResult } from "../types";
+import { pdfPreflight } from "../pdfGuard";
+import { detectLanguage } from "../languageDetector";
+import type { ValidationResult, IntentVerdict, ProgressEvent, PipelineStage, OcrResult, PreflightResult } from "../types";
 
 export type { ValidationResult };
 
@@ -52,6 +54,17 @@ export async function browserValidateUpload(
   const arrayBuffer = await file.arrayBuffer();
   const fileBuffer = new Uint8Array(arrayBuffer);
 
+  // ── Phase 1.1: Pre-flight validation ──────────────────────────────────────
+  emit("pdf-loading", "Checking file…", 2);
+  const preflight = await pdfPreflight(file);
+  if (!preflight.ok) {
+    // Return early with a structured error — no pipeline stages run
+    throw Object.assign(new Error(preflight.reason), {
+      actionableHint: preflight.actionableHint,
+      isPreflight: true,
+    });
+  }
+
   // ── Step 1: Load PDF & classify pages ──────────────────────────────────────
   emit("pdf-loading", "Loading PDF…", 5);
   const t0 = performance.now();
@@ -68,6 +81,21 @@ export async function browserValidateUpload(
   const ocrPages = pages.filter((p) => p.needsOCR);
 
   emit("page-classification", `${textNative} text-native | ${imageOnly} image-only | ${mixed} mixed`, 25);
+
+  // ── Phase 1.2: Language detection ─────────────────────────────────────
+  // Sample text from first 3 text-native pages (no cost, already extracted)
+  const langSample = pages
+    .filter((p) => !p.needsOCR && p.extractedText.length > 20)
+    .slice(0, 3)
+    .map((p) => p.extractedText)
+    .join(" ")
+    .slice(0, 500);
+  const langResult = detectLanguage(langSample);
+  if (langResult.confident && langResult.tesseractLang !== "eng") {
+    emit("page-classification", `Detected language: ${langResult.displayName} — OCR will use ${langResult.tesseractLang} mode.`, 26);
+  } else if (!langResult.confident && ocrPages.length > 0) {
+    emit("page-classification", "Language unclear — defaulting to English OCR. If results look wrong, the document may be in another language.", 26);
+  }
 
   // ── Step 2: OCR flagged pages ───────────────────────────────────────────────
   const t1 = performance.now();
@@ -89,8 +117,8 @@ export async function browserValidateUpload(
         // Preprocess: grayscale + binarization
         preprocessCanvas(canvas);
 
-        // Run Tesseract
-        const ocrResult = await runOcrOnPage(canvas, ocrPage.pageNumber);
+        // Run Tesseract with detected language
+        const ocrResult = await runOcrOnPage(canvas, ocrPage.pageNumber, undefined, langResult.tesseractLang);
         ocrResults.set(ocrPage.pageNumber, ocrResult);
 
         emit(

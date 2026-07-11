@@ -1,15 +1,15 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ModifAI — Input Validation</title>
-  <meta name="description" content="ModifAI Input Validation — Intent Classification and Data Quality Gate for AI-powered document pipelines." />
+  <title>ModifAI â€” Input Validation</title>
+  <meta name="description" content="ModifAI Input Validation â€” Intent Classification and Data Quality Gate for AI-powered document pipelines." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <style>
-    /* ── Design Tokens ─────────────────────────────────────────────────────── */
+    /* â”€â”€ Design Tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     :root {
       --bg-base:        #07090f;
       --bg-surface:     #0d111e;
@@ -42,7 +42,7 @@
       --transition:     0.2s cubic-bezier(0.4,0,0.2,1);
     }
 
-    /* ── Reset & Base ──────────────────────────────────────────────────────── */
+    /* â”€â”€ Reset & Base â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     html { scroll-behavior: smooth; }
@@ -56,7 +56,7 @@
       overflow-x: hidden;
     }
 
-    /* ── Animated Background ───────────────────────────────────────────────── */
+    /* â”€â”€ Animated Background â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .bg-orbs {
       position: fixed;
       inset: 0;
@@ -83,7 +83,7 @@
     @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(60px,40px)} }
     @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-50px,-60px)} }
 
-    /* ── Layout ────────────────────────────────────────────────────────────── */
+    /* â”€â”€ Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .app-wrapper {
       position: relative;
       z-index: 1;
@@ -92,7 +92,7 @@
       padding: 40px 24px 80px;
     }
 
-    /* ── Header ────────────────────────────────────────────────────────────── */
+    /* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .header {
       text-align: center;
       margin-bottom: 48px;
@@ -140,7 +140,7 @@
       margin: 0 auto;
     }
 
-    /* ── Cards ─────────────────────────────────────────────────────────────── */
+    /* â”€â”€ Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -152,7 +152,7 @@
     }
     .card:hover { border-color: var(--border-glow); box-shadow: var(--shadow-glow); }
 
-    /* ── Section Labels ────────────────────────────────────────────────────── */
+    /* â”€â”€ Section Labels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .section-label {
       display: flex;
       align-items: center;
@@ -176,7 +176,7 @@
       flex-shrink: 0;
     }
 
-    /* ── Drop Zone ─────────────────────────────────────────────────────────── */
+    /* â”€â”€ Drop Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     #drop-zone {
       border: 2px dashed var(--border);
       border-radius: var(--radius-md);
@@ -241,7 +241,7 @@
     }
     #file-input { display: none; }
 
-    /* ── Text Inputs ───────────────────────────────────────────────────────── */
+    /* â”€â”€ Text Inputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .input-group { margin-bottom: 16px; }
     .input-label {
       display: block;
@@ -278,7 +278,7 @@
       margin-top: 6px;
     }
 
-    /* ── Run Button ────────────────────────────────────────────────────────── */
+    /* â”€â”€ Run Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     #run-btn {
       width: 100%;
       padding: 16px 24px;
@@ -317,7 +317,7 @@
       box-shadow: none;
     }
 
-    /* ── Pipeline Progress ─────────────────────────────────────────────────── */
+    /* â”€â”€ Pipeline Progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     #progress-section { display: none; }
 
     .progress-bar-wrap {
@@ -423,7 +423,7 @@
       margin-top: 3px;
     }
 
-    /* ── Log stream ────────────────────────────────────────────────────────── */
+    /* â”€â”€ Log stream â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .log-stream {
       background: var(--bg-input);
       border: 1px solid var(--border);
@@ -447,7 +447,7 @@
     .log-line.done { color: var(--accent2); }
     .log-line.error { color: var(--danger); }
 
-    /* ── Results Panel ─────────────────────────────────────────────────────── */
+    /* â”€â”€ Results Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     #results-section { display: none; }
 
     .result-header {
@@ -496,7 +496,7 @@
     .result-reason.confirm-reason { border-left-color: var(--warn); }
     .result-reason.block-reason   { border-left-color: var(--danger); }
 
-    /* ── Metrics Grid ──────────────────────────────────────────────────────── */
+    /* â”€â”€ Metrics Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .metrics-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -534,7 +534,7 @@
     .score-d { color: #f97316; }
     .score-f { color: #ef4444; }
 
-    /* ── Page Breakdown Bar ────────────────────────────────────────────────── */
+    /* â”€â”€ Page Breakdown Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .breakdown-bar {
       height: 10px;
       border-radius: 999px;
@@ -570,7 +570,7 @@
       flex-shrink: 0;
     }
 
-    /* ── Chunk Scores Table ────────────────────────────────────────────────── */
+    /* â”€â”€ Chunk Scores Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .chunk-table-wrap {
       overflow-x: auto;
       border-radius: var(--radius-sm);
@@ -614,7 +614,7 @@
       background: linear-gradient(90deg, var(--primary), var(--accent));
     }
 
-    /* ── Issues List ───────────────────────────────────────────────────────── */
+    /* â”€â”€ Issues List â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .issues-list {
       display: flex;
       flex-direction: column;
@@ -637,7 +637,7 @@
       margin-top: 1px;
     }
 
-    /* ── Timings ───────────────────────────────────────────────────────────── */
+    /* â”€â”€ Timings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .timings-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -664,7 +664,7 @@
       color: var(--text-muted);
     }
 
-    /* ── Confirm Dialog ────────────────────────────────────────────────────── */
+    /* â”€â”€ Confirm Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     #confirm-dialog {
       display: none;
       margin-top: 20px;
@@ -713,7 +713,7 @@
     }
     .btn-cancel:hover { border-color: var(--border-glow); color: var(--text-primary); }
 
-    /* ── Subsection titles ─────────────────────────────────────────────────── */
+    /* â”€â”€ Subsection titles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .subsection-title {
       font-size: 0.8rem;
       font-weight: 700;
@@ -732,7 +732,7 @@
       background: var(--border);
     }
 
-    /* ── Reset Button ──────────────────────────────────────────────────────── */
+    /* â”€â”€ Reset Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     #reset-btn {
       padding: 10px 20px;
       border-radius: var(--radius-sm);
@@ -748,7 +748,7 @@
     }
     #reset-btn:hover { border-color: var(--border-glow); color: var(--text-primary); }
 
-    /* ── Footer ────────────────────────────────────────────────────────────── */
+    /* â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .footer {
       text-align: center;
       margin-top: 48px;
@@ -758,12 +758,12 @@
     .footer a { color: var(--primary-light); text-decoration: none; }
     .footer a:hover { text-decoration: underline; }
 
-    /* ── Scrollbar ─────────────────────────────────────────────────────────── */
+    /* â”€â”€ Scrollbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(99,131,255,0.3); border-radius: 3px; }
 
-    /* ── Responsive ────────────────────────────────────────────────────────── */
+    /* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     @media (max-width: 600px) {
       .app-wrapper { padding: 24px 16px 60px; }
       .card { padding: 20px; }
@@ -777,17 +777,63 @@
 
   <div class="app-wrapper">
 
-    <!-- ── Header ─────────────────────────────────────────────────────────── -->
+    <!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <header class="header">
       <div class="header-badge">ModifAI Pipeline Gate</div>
       <h1>Input Validation</h1>
       <p>
-        Fast, cheap intent classification and data quality check — runs before
+        Fast, cheap intent classification and data quality check â€” runs before
         your AI pipeline spends any real compute.
       </p>
     </header>
 
-    <!-- ── Step 1: Upload PDF ──────────────────────────────────────────────── -->
+    <!-- â”€â”€ Phase 1.3: Data Transparency â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <details id="data-transparency" style="
+      margin-bottom: 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+    ">
+      <summary style="
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        color: var(--text-primary);
+        user-select: none;
+      ">
+        ðŸ”’ What stays in your browser &amp; what leaves it
+        <span style="margin-left:auto; font-size:0.75rem; color:var(--text-muted)">click to expand</span>
+      </summary>
+      <div style="margin-top: 12px; display: grid; gap: 8px;">
+        <div>
+          <strong style="color:#4ade80">âœ“ Stays in your browser (never uploaded)</strong>
+          <ul style="margin: 4px 0 0 16px; line-height: 1.8;">
+            <li>Your PDF file â€” processed entirely client-side</li>
+            <li>OCR â€” runs on your device via WebAssembly (Tesseract.js)</li>
+            <li>Semantic matching â€” local AI model, no API call needed</li>
+          </ul>
+        </div>
+        <div>
+          <strong style="color:#f59e0b">â˜ Sent to OpenRouter (only when needed)</strong>
+          <ul style="margin: 4px 0 0 16px; line-height: 1.8;">
+            <li>Short text excerpts (â‰¤ 2 000 chars per chunk) for quality scoring</li>
+            <li>Your intent description for borderline matching decisions</li>
+          </ul>
+          <div style="margin-top:6px; color:var(--text-muted)">
+            ModifAI does not store these excerpts. Â· <a href="https://openrouter.ai/privacy" target="_blank" rel="noopener" style="color:var(--primary)">OpenRouter privacy policy â†—</a>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- â”€â”€ Step 1: Upload PDF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+
     <div class="card" id="upload-card">
       <div class="section-label">
         <div class="step-dot">1</div>
@@ -795,15 +841,15 @@
       </div>
 
       <div id="drop-zone" role="button" tabindex="0" aria-label="Upload PDF document">
-        <span class="drop-icon" id="drop-icon">📄</span>
+        <span class="drop-icon" id="drop-icon">ðŸ“„</span>
         <div class="drop-title" id="drop-title">Drop a PDF here, or click to browse</div>
-        <div class="drop-subtitle" id="drop-subtitle">PDF files only · Max ~100 MB</div>
+        <div class="drop-subtitle" id="drop-subtitle">PDF files only Â· Max ~100 MB</div>
         <div class="file-info" id="file-info" style="display:none;"></div>
       </div>
       <input type="file" id="file-input" accept="application/pdf" />
     </div>
 
-    <!-- ── Step 2: Configure ───────────────────────────────────────────────── -->
+    <!-- â”€â”€ Step 2: Configure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <div class="card">
       <div class="section-label">
         <div class="step-dot">2</div>
@@ -811,7 +857,7 @@
       </div>
 
       <div class="input-group">
-        <label class="input-label" for="intent-input">Your intent — what do you want to build?</label>
+        <label class="input-label" for="intent-input">Your intent â€” what do you want to build?</label>
         <input
           type="text"
           id="intent-input"
@@ -823,14 +869,14 @@
         <div class="input-hint">The document will be checked against this goal.</div>
       </div>
 
-      <!-- API key is injected server-side from .env — not exposed to the UI -->
+      <!-- API key is injected server-side from .env â€” not exposed to the UI -->
 
       <button id="run-btn" disabled>
         Run Validation
       </button>
     </div>
 
-    <!-- ── Step 3: Progress ────────────────────────────────────────────────── -->
+    <!-- â”€â”€ Step 3: Progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <div class="card" id="progress-section">
       <div class="section-label">
         <div class="step-dot">3</div>
@@ -848,7 +894,7 @@
       <div class="log-stream" id="log-stream" aria-live="polite" aria-label="Pipeline log"></div>
     </div>
 
-    <!-- ── Step 4: Results ─────────────────────────────────────────────────── -->
+    <!-- â”€â”€ Step 4: Results â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <div class="card" id="results-section">
       <div class="section-label">
         <div class="step-dot">4</div>
@@ -861,10 +907,10 @@
 
       <!-- Confirm dialog for borderline cases -->
       <div id="confirm-dialog">
-        <div class="confirm-title">⚠ Proceed anyway?</div>
+        <div class="confirm-title">âš  Proceed anyway?</div>
         <div class="confirm-text" id="confirm-text"></div>
         <div class="confirm-actions">
-          <button class="btn-confirm btn-proceed" id="btn-proceed-anyway">Proceed to Pipeline →</button>
+          <button class="btn-confirm btn-proceed" id="btn-proceed-anyway">Proceed to Pipeline â†’</button>
           <button class="btn-confirm btn-cancel" id="btn-cancel-proceed">Cancel</button>
         </div>
       </div>
@@ -907,28 +953,28 @@
 
       <!-- Reset -->
       <div style="text-align:center;margin-top:28px">
-        <button id="reset-btn" style="display:inline-block">← Validate Another Document</button>
+        <button id="reset-btn" style="display:inline-block">â† Validate Another Document</button>
       </div>
     </div>
 
     <footer class="footer">
       <p>
-        ModifAI · Input Validation Module ·
-        <a href="https://openrouter.ai" target="_blank" rel="noopener">OpenRouter</a> ·
+        ModifAI Â· Input Validation Module Â·
+        <a href="https://openrouter.ai" target="_blank" rel="noopener">OpenRouter</a> Â·
         OCR runs free in your browser via Tesseract.js
       </p>
     </footer>
   </div>
 
-  <!-- ── External Libraries (CDN) ─────────────────────────────────────────── -->
+  <!-- â”€â”€ External Libraries (CDN) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 
   <!-- pdf.js -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module" id="pdfjs-script"></script>
 
-  <!-- ── Main Application Script ─────────────────────────────────────────── -->
+  <!-- â”€â”€ Main Application Script â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <script type="module">
-    // ── Wait for pdf.js to be available ──────────────────────────────────────
-    // We load it as a module — import it properly
+    // â”€â”€ Wait for pdf.js to be available â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // We load it as a module â€” import it properly
     let pdfjsLib = null;
 
     async function loadPdfJs() {
@@ -939,7 +985,7 @@
       return pdfjsLib;
     }
 
-    // ── Tesseract.js from CDN ─────────────────────────────────────────────
+    // â”€â”€ Tesseract.js from CDN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function loadTesseract() {
       return new Promise((resolve, reject) => {
         const script = document.createElement("script");
@@ -950,7 +996,7 @@
       });
     }
 
-    // ── Transformers.js (MiniLM embeddings) ──────────────────────────────
+    // â”€â”€ Transformers.js (MiniLM embeddings) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let transformersPipeline = null;
     async function loadTransformers() {
       const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js");
@@ -958,9 +1004,9 @@
       return pipeline;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // DOM references
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const dropZone      = document.getElementById("drop-zone");
     const fileInput     = document.getElementById("file-input");
     const dropIcon      = document.getElementById("drop-icon");
@@ -968,7 +1014,7 @@
     const dropSubtitle  = document.getElementById("drop-subtitle");
     const fileInfoEl    = document.getElementById("file-info");
     const intentInput   = document.getElementById("intent-input");
-    // API key is injected by server.js from the environment — never in the UI
+    // API key is injected by server.js from the environment â€” never in the UI
     const getApiKey = () => (window.__MODIFAI_CONFIG__?.apiKey || "");
     const runBtn        = document.getElementById("run-btn");
     const progressSec   = document.getElementById("progress-section");
@@ -982,19 +1028,19 @@
 
     let selectedFile = null;
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // File handling
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function setFile(file) {
       if (!file || file.type !== "application/pdf") {
         alert("Please select a PDF file.");
         return;
       }
       selectedFile = file;
-      dropIcon.textContent = "✅";
+      dropIcon.textContent = "âœ…";
       dropTitle.textContent = "PDF loaded";
       dropSubtitle.textContent = "";
-      fileInfoEl.textContent = `${file.name}  ·  ${(file.size / 1024).toFixed(0)} KB`;
+      fileInfoEl.textContent = `${file.name}  Â·  ${(file.size / 1024).toFixed(0)} KB`;
       fileInfoEl.style.display = "inline-flex";
       dropZone.classList.add("has-file");
       updateRunBtn();
@@ -1018,19 +1064,19 @@
     }
     intentInput.addEventListener("input", updateRunBtn);
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Pipeline step definitions
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const STAGES = [
-      { key: "pdf-loading",     label: "PDF Loading",       icon: "📂" },
-      { key: "page-classification", label: "Page Classification", icon: "🔎" },
-      { key: "ocr",             label: "OCR",               icon: "👁" },
-      { key: "chunking",        label: "Chunking",          icon: "✂️" },
-      { key: "sampling",        label: "Sampling",          icon: "🎯" },
-      { key: "intent-check",    label: "Intent Check",      icon: "🧠" },
-      { key: "quality-scoring", label: "Quality Scoring",   icon: "⭐" },
-      { key: "aggregation",     label: "Aggregation",       icon: "📊" },
-      { key: "done",            label: "Complete",          icon: "✅" },
+      { key: "pdf-loading",     label: "PDF Loading",       icon: "ðŸ“‚" },
+      { key: "page-classification", label: "Page Classification", icon: "ðŸ”Ž" },
+      { key: "ocr",             label: "OCR",               icon: "ðŸ‘" },
+      { key: "chunking",        label: "Chunking",          icon: "âœ‚ï¸" },
+      { key: "sampling",        label: "Sampling",          icon: "ðŸŽ¯" },
+      { key: "intent-check",    label: "Intent Check",      icon: "ðŸ§ " },
+      { key: "quality-scoring", label: "Quality Scoring",   icon: "â­" },
+      { key: "aggregation",     label: "Aggregation",       icon: "ðŸ“Š" },
+      { key: "done",            label: "Complete",          icon: "âœ…" },
     ];
 
     function buildPipelineSteps() {
@@ -1043,7 +1089,7 @@
           <div class="step-icon" id="step-icon-${stage.key}">${stage.icon}</div>
           <div class="step-content">
             <div class="step-name">${stage.label}</div>
-            <div class="step-message" id="step-msg-${stage.key}">Waiting…</div>
+            <div class="step-message" id="step-msg-${stage.key}">Waitingâ€¦</div>
             <div class="step-detail" id="step-detail-${stage.key}" style="display:none"></div>
           </div>`;
         pipelineSteps.appendChild(el);
@@ -1077,9 +1123,9 @@
       logStream.scrollTop = logStream.scrollHeight;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Module A — PDF loading & classification (inline)
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Module A â€” PDF loading & classification (inline)
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const TEXT_DENSITY_THRESHOLD = 100;
 
     async function loadAndClassifyPdf(fileBuffer, lib, onProgress) {
@@ -1127,9 +1173,9 @@
       return canvas;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Module B — OCR preprocessing & Tesseract
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Module B â€” OCR preprocessing & Tesseract
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function preprocessCanvas(canvas) {
       const ctx = canvas.getContext("2d");
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1152,9 +1198,9 @@
       return { pageNumber, text: data.text, averageConfidence, wordConfidences };
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Module C — Chunking & sampling
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Module C â€” Chunking & sampling
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const MAX_CHUNK_CHARS = 2000;
     const OVERLAP_CHARS = 200;
 
@@ -1166,7 +1212,12 @@
 
       const flush = () => {
         const text = buffer.trim();
-        if (text.length > 0) chunks.push({ id: `p${pageNumber}-c${idx++}`, text, sourceType, confidence, pageNumber });
+        if (text.length > 0) {
+          const chunk = { id: `p${pageNumber}-c${idx++}`, text, sourceType, confidence, pageNumber };
+          console.log(`[Chunker] Created chunk ${chunk.id} (${chunk.sourceType}, conf: ${chunk.confidence.toFixed(2)})`);
+          console.log(`          Text: "${chunk.text.substring(0, 60).replace(/\n/g, " ")}..."`);
+          chunks.push(chunk);
+        }
         buffer = "";
       };
 
@@ -1208,17 +1259,17 @@
       return Array.from({ length: sampleCount }, (_, i) => allChunks[Math.floor(i * step)]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Module D — Intent classification
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Module D â€” Intent classification
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let embedder = null;
 
     async function getEmbedder() {
       if (embedder) return embedder;
-      addLog("Loading MiniLM embedding model (first run — may take a moment)…");
+      addLog("Loading MiniLM embedding model (first run â€” may take a moment)â€¦");
       const pipeline = transformersPipeline || (await loadTransformers());
       embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-      addLog("Embedding model loaded ✓", "done");
+      addLog("Embedding model loaded âœ“", "done");
       return embedder;
     }
 
@@ -1263,9 +1314,9 @@
       catch { return { verdict: "partial", reason: "Could not parse LLM response." }; }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Module E — Quality scoring
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Module E â€” Quality scoring
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function scoreChunkQuality(chunkText, apiKey) {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -1284,12 +1335,12 @@
         p.score = Math.max(0, Math.min(100, p.score));
         p.issues = Array.isArray(p.issues) ? p.issues.slice(0,3) : [];
         return p;
-      } catch { return { score: 50, issues: ["Parse error — defaulting to 50."] }; }
+      } catch { return { score: 50, issues: ["Parse error â€” defaulting to 50."] }; }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Module F — Aggregation & decision
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Module F â€” Aggregation & decision
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function aggregateScore(scoredChunks) {
       if (!scoredChunks.length) return 0;
       const wSum = scoredChunks.reduce((s,c) => s + c.qualityScore * c.extractionConfidence, 0);
@@ -1307,16 +1358,16 @@
       return { decision: "block", reason: "Document quality is too low (score: " + finalScore.toFixed(1) + "/100). It may be mostly unreadable, too sparse, or corrupted by a poor scan." };
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Main pipeline runner
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function runValidation() {
       const userIntent = intentInput.value.trim();
       const apiKey = getApiKey();
 
       if (!selectedFile || !userIntent) return;
 
-      // ── Setup UI ──────────────────────────────────────────────────────────
+      // â”€â”€ Setup UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       runBtn.disabled = true;
       progressSec.style.display = "block";
       resultsSec.style.display = "none";
@@ -1329,7 +1380,7 @@
         progressBar.style.width = (progress ?? 0) + "%";
         updateStep(stage, message, detail, "active");
         addLog(message, "active");
-        if (detail) addLog("  → " + detail);
+        if (detail) addLog("  â†’ " + detail);
         // Mark previous stages as done
         const idx = STAGES.findIndex(s => s.key === stage);
         for (let i = 0; i < idx; i++) {
@@ -1342,26 +1393,26 @@
       const totalStart = performance.now();
 
       try {
-        // ── Load libraries ─────────────────────────────────────────────────
-        emit("pdf-loading", "Loading libraries…", 2);
+        // â”€â”€ Load libraries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("pdf-loading", "Loading librariesâ€¦", 2);
         const [lib, Tesseract] = await Promise.all([
           loadPdfJs(),
           loadTesseract().catch(() => null)
         ]);
-        addLog("Libraries loaded ✓", "done");
+        addLog("Libraries loaded âœ“", "done");
 
-        // ── Read file ──────────────────────────────────────────────────────
-        emit("pdf-loading", "Reading PDF file…", 4);
+        // â”€â”€ Read file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("pdf-loading", "Reading PDF fileâ€¦", 4);
         const arrayBuffer = await selectedFile.arrayBuffer();
         const fileBuffer = new Uint8Array(arrayBuffer);
 
-        // ── Step 1: Classify pages ─────────────────────────────────────────
-        emit("page-classification", "Classifying PDF pages…", 5);
+        // â”€â”€ Step 1: Classify pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("page-classification", "Classifying PDF pagesâ€¦", 5);
         const t0 = performance.now();
 
         const pages = await loadAndClassifyPdf(fileBuffer, lib, (pageNum, total) => {
           progressBar.style.width = (5 + Math.round((pageNum / total) * 20)) + "%";
-          updateStep("page-classification", `Classifying page ${pageNum}/${total}…`, null, null, "active");
+          updateStep("page-classification", `Classifying page ${pageNum}/${total}â€¦`, null, null, "active");
         });
 
         timings.pdfLoad = performance.now() - t0;
@@ -1376,14 +1427,14 @@
           25, `${ocrPages.length} page(s) flagged for OCR`);
         addLog(`Classification done in ${timings.pdfLoad.toFixed(0)}ms`, "done");
 
-        // ── Step 2: OCR ────────────────────────────────────────────────────
+        // â”€â”€ Step 2: OCR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         const t1 = performance.now();
         const ocrResults = new Map();
 
         if (ocrPages.length > 0 && Tesseract) {
           for (let i = 0; i < ocrPages.length; i++) {
             const ocrPage = ocrPages[i];
-            emit("ocr", `OCR: page ${ocrPage.pageNumber} (${i+1}/${ocrPages.length})…`,
+            emit("ocr", `OCR: page ${ocrPage.pageNumber} (${i+1}/${ocrPages.length})â€¦`,
               25 + Math.round(((i + 0.5) / ocrPages.length) * 20));
             try {
               const canvas = await renderPageToCanvas(fileBuffer, ocrPage.pageNumber, lib, 2.0);
@@ -1397,16 +1448,16 @@
           }
         } else if (ocrPages.length > 0) {
           emit("ocr", `${ocrPages.length} page(s) need OCR but Tesseract failed to load.`, 45);
-          addLog("Tesseract unavailable — OCR skipped.", "error");
+          addLog("Tesseract unavailable â€” OCR skipped.", "error");
         } else {
-          emit("ocr", "No pages need OCR — all text-native.", 45, "Skipping OCR entirely ✓");
-          updateStep("ocr", "Skipped — all text-native.", null, "done");
+          emit("ocr", "No pages need OCR â€” all text-native.", 45, "Skipping OCR entirely âœ“");
+          updateStep("ocr", "Skipped â€” all text-native.", null, "done");
         }
 
         timings.ocr = performance.now() - t1;
 
-        // ── Step 3: Chunking ───────────────────────────────────────────────
-        emit("chunking", "Chunking document text…", 52);
+        // â”€â”€ Step 3: Chunking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("chunking", "Chunking document textâ€¦", 52);
         const t2 = performance.now();
 
         let allChunks = [];
@@ -1432,14 +1483,14 @@
           throw new Error("No extractable text found in the document.");
         }
 
-        // ── Step 4: Sampling ───────────────────────────────────────────────
-        emit("sampling", "Running stratified sample…", 57);
+        // â”€â”€ Step 4: Sampling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("sampling", "Running stratified sampleâ€¦", 57);
         const sample = stratifiedSample(allChunks);
         const combinedSampleText = sample.map(c => c.text).join("\n\n");
         emit("sampling", `Selected ${sample.length} chunks from ${pages.length} pages.`, 60);
 
-        // ── Step 5: Intent check ───────────────────────────────────────────
-        emit("intent-check", "Loading embedding model…", 62);
+        // â”€â”€ Step 5: Intent check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("intent-check", "Loading embedding modelâ€¦", 62);
         const t3 = performance.now();
         await loadTransformers();
 
@@ -1447,25 +1498,25 @@
         let intentVerdict = similarityToVerdict(similarity);
         let intentReason = "";
 
-        emit("intent-check", `Embedding similarity: ${similarity.toFixed(3)} → ${intentVerdict}`, 66);
+        emit("intent-check", `Embedding similarity: ${similarity.toFixed(3)} â†’ ${intentVerdict}`, 66);
 
         if (needsLLMCheck && apiKey) {
-          emit("intent-check", "Borderline score — asking LLM for verdict…", 68);
+          emit("intent-check", "Borderline score â€” asking LLM for verdictâ€¦", 68);
           try {
             const llmRes = await llmIntentVerdict(userIntent, combinedSampleText, apiKey);
             intentVerdict = llmRes.verdict;
             intentReason = llmRes.reason;
             emit("intent-check", `LLM verdict: ${intentVerdict}`, 70, intentReason);
           } catch (err) {
-            addLog(`LLM intent check failed: ${err.message} — using embedding verdict.`, "error");
+            addLog(`LLM intent check failed: ${err.message} â€” using embedding verdict.`, "error");
           }
         }
 
         timings.intentCheck = performance.now() - t3;
         addLog(`Intent: ${intentVerdict} (sim=${similarity.toFixed(3)})`, "done");
 
-        // ── Step 6: Quality scoring ────────────────────────────────────────
-        emit("quality-scoring", `Scoring ${sample.length} chunks…`, 72);
+        // â”€â”€ Step 6: Quality scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("quality-scoring", `Scoring ${sample.length} chunksâ€¦`, 72);
         const t4 = performance.now();
 
         let scoredChunks = [];
@@ -1473,7 +1524,7 @@
         if (apiKey) {
           for (let i = 0; i < sample.length; i++) {
             const c = sample[i];
-            emit("quality-scoring", `Scoring chunk ${i+1}/${sample.length}…`,
+            emit("quality-scoring", `Scoring chunk ${i+1}/${sample.length}â€¦`,
               72 + Math.round(((i+1) / sample.length) * 18));
             try {
               const q = await scoreChunkQuality(c.text, apiKey);
@@ -1481,11 +1532,11 @@
               addLog(`${c.id}: score=${q.score}`, "done");
             } catch (err) {
               scoredChunks.push({ chunkId: c.id, qualityScore: 50, extractionConfidence: c.confidence, issues: ["Scoring error"] });
-              addLog(`${c.id}: scoring failed — defaulting to 50`, "error");
+              addLog(`${c.id}: scoring failed â€” defaulting to 50`, "error");
             }
           }
         } else {
-          addLog("No API key — using heuristic quality scores.");
+          addLog("No API key â€” using heuristic quality scores.");
           scoredChunks = sample.map(c => ({
             chunkId: c.id,
             qualityScore: Math.round(c.confidence * 75 + (Math.min(c.text.length, 500) / 500) * 25),
@@ -1497,8 +1548,8 @@
 
         timings.qualityScoring = performance.now() - t4;
 
-        // ── Step 7: Aggregate ──────────────────────────────────────────────
-        emit("aggregation", "Aggregating scores…", 94);
+        // â”€â”€ Step 7: Aggregate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        emit("aggregation", "Aggregating scoresâ€¦", 94);
         const finalScore = aggregateScore(scoredChunks);
         const { decision, reason } = decide(finalScore, intentVerdict);
         timings.total = performance.now() - totalStart;
@@ -1509,9 +1560,9 @@
           if (el) { el.classList.remove("active"); el.classList.add("done"); }
         }
         progressBar.style.width = "100%";
-        addLog(`✓ Done! Score: ${finalScore.toFixed(1)} | ${decision}`, "done");
+        addLog(`âœ“ Done! Score: ${finalScore.toFixed(1)} | ${decision}`, "done");
 
-        // ── Render results ─────────────────────────────────────────────────
+        // â”€â”€ Render results â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         renderResults({
           finalScore, intentVerdict, intentSimilarity: similarity, decision, reason,
           pageBreakdown: { total: pages.length, textNative, imageOnly, mixed },
@@ -1519,21 +1570,30 @@
           allIssues: [...new Set(scoredChunks.flatMap(c => c.issues).filter(i => i))],
         });
 
+
       } catch (err) {
-        emit("error", `Error: ${err.message}`, null, null);
+        const isPreflight = err.isPreflight === true;
+        const userMsg = isPreflight ? err.message + " \u2014 " + err.actionableHint : "Unexpected error: " + err.message;
+        emit("error", userMsg, null, null);
         for (const s of STAGES) {
           const el = document.getElementById(`step-${s.key}`);
           if (el && el.classList.contains("active")) el.classList.add("error-step");
         }
-        addLog(`ERROR: ${err.message}`, "error");
+        addLog("ERROR: " + userMsg, "error");
+        if (isPreflight) {
+          resultsSec.style.display = "block";
+          document.getElementById("result-header").innerHTML = '<div class="decision-badge block">\u274c File Rejected</div>';
+          document.getElementById("result-reason").textContent = err.actionableHint;
+          document.getElementById("result-reason").className = "result-reason block-reason";
+        }
         runBtn.disabled = false;
-        console.error(err);
+        if (!isPreflight) console.error(err);
       }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Render results panel
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function renderResults(data) {
       const { finalScore, intentVerdict, intentSimilarity, decision, reason,
               pageBreakdown, sampledChunks, scoredChunks, timings, allIssues } = data;
@@ -1543,9 +1603,9 @@
 
       // Decision badge
       const decisionMap = {
-        "proceed": { emoji: "✅", label: "Proceed to Pipeline", cls: "proceed" },
-        "confirm-with-user": { emoji: "⚠️", label: "Needs Confirmation", cls: "confirm" },
-        "block": { emoji: "❌", label: "Blocked", cls: "block" }
+        "proceed": { emoji: "âœ…", label: "Proceed to Pipeline", cls: "proceed" },
+        "confirm-with-user": { emoji: "âš ï¸", label: "Needs Confirmation", cls: "confirm" },
+        "block": { emoji: "âŒ", label: "Blocked", cls: "block" }
       };
       const dm = decisionMap[decision];
       document.getElementById("result-header").innerHTML = `
@@ -1561,7 +1621,7 @@
         confirmDialog.style.display = "block";
         confirmText.textContent = reason;
         document.getElementById("btn-proceed-anyway").onclick = () => {
-          confirmDialog.innerHTML = `<div style="color:var(--accent2);font-weight:600;padding:10px 0">✅ Confirmed — handing off to pipeline.</div>`;
+          confirmDialog.innerHTML = `<div style="color:var(--accent2);font-weight:600;padding:10px 0">âœ… Confirmed â€” handing off to pipeline.</div>`;
         };
         document.getElementById("btn-cancel-proceed").onclick = () => {
           confirmDialog.style.display = "none";
@@ -1623,7 +1683,7 @@
         const confPct = (c.extractionConfidence * 100).toFixed(0);
         return `<tr>
           <td>${c.chunkId}</td>
-          <td>${c.extractionConfidence < 1.0 ? "🔎 OCR" : "📄 Text"}</td>
+          <td>${c.extractionConfidence < 1.0 ? "ðŸ”Ž OCR" : "ðŸ“„ Text"}</td>
           <td style="color:${scoreColor};font-weight:600">${c.qualityScore}</td>
           <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${c.qualityScore}%"></div></div></td>
           <td>${confPct}%</td>
@@ -1634,7 +1694,7 @@
       if (allIssues.length > 0) {
         document.getElementById("issues-section").style.display = "block";
         document.getElementById("issues-list").innerHTML = allIssues.map(i =>
-          `<div class="issue-item"><span class="issue-icon">⚠</span>${i}</div>`
+          `<div class="issue-item"><span class="issue-icon">âš </span>${i}</div>`
         ).join("");
       }
 
@@ -1657,17 +1717,17 @@
       resetBtn.style.display = "inline-block";
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Wire up buttons
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     runBtn.addEventListener("click", runValidation);
 
     resetBtn.addEventListener("click", () => {
       selectedFile = null;
       fileInput.value = "";
-      dropIcon.textContent = "📄";
+      dropIcon.textContent = "ðŸ“„";
       dropTitle.textContent = "Drop a PDF here, or click to browse";
-      dropSubtitle.textContent = "PDF files only · Max ~100 MB";
+      dropSubtitle.textContent = "PDF files only Â· Max ~100 MB";
       fileInfoEl.style.display = "none";
       dropZone.classList.remove("has-file");
       intentInput.value = "";
