@@ -182,36 +182,42 @@ export async function browserValidateUpload(
     return emptyResult;
   }
 
-  // ── Step 4: Stratified sampling ─────────────────────────────────────────────
-  emit("sampling", `${allChunks.length} chunks created. Selecting sample…`, 55);
-  const sample = stratifiedSample(allChunks);
-  const combinedSampleText = sample.map((c) => c.text).join("\n\n");
-
-  emit("sampling", `Selected ${sample.length} chunks for validation.`, 58);
-
-  // ── Step 5: Intent check ────────────────────────────────────────────────────
-  // Phase 2.1: Vagueness check (free, deterministic)
+  // ── Step 4a: Intent expansion (before sampling — keywords drive chunk selection) ──
+  // Phase 2.1: Vagueness check (free, deterministic — no LLM)
   const vagueness = checkIntentVagueness(userIntent);
   if (vagueness.vague) {
-    emit("intent-check", `Intent may be too vague (${vagueness.reason}). Suggestion: ${vagueness.suggestion}`, 61);
+    emit("intent-check", `Intent may be too vague (${vagueness.reason}). Suggestion: ${vagueness.suggestion}`, 54);
   }
 
-  // Phase 2.2: Intent expansion (one LLM call — gives refined_query + document_keywords)
+  // Phase 2.2: Intent expansion (one LLM call — keywords feed Phase 3.2 sampling)
   let expandedIntent: ExpandedIntent | null = null;
   let queryForEmbedding = userIntent;
   if (apiKey) {
-    emit("intent-check", "Expanding intent for better matching…", 62);
+    emit("intent-check", "Expanding intent for better matching…", 55);
     expandedIntent = await expandIntent(userIntent, apiKey);
     if (expandedIntent) {
       queryForEmbedding = expandedIntent.refined_query;
       emit("intent-check",
         `Intent understood — Domain: ${expandedIntent.domain} | Use case: ${expandedIntent.use_case}`,
-        63, `Keywords: ${expandedIntent.document_keywords.join(", ")}`
+        56, `Keywords: ${expandedIntent.document_keywords.join(", ")}`
       );
     }
   }
 
-  emit("intent-check", "Checking intent match (local embeddings)…", 64);
+  // ── Step 4b: Stratified sampling (keyword-weighted when expansion succeeded) ──
+  const keywords = expandedIntent?.document_keywords ?? [];
+  emit("sampling", `${allChunks.length} chunks created. Selecting sample…`, 57);
+  const sample = stratifiedSample(allChunks, keywords);  // Phase 3.2: relevance-weighted
+  const combinedSampleText = sample.map((c) => c.text).join("\n\n");
+
+  if (keywords.length > 0) {
+    emit("sampling", `Selected ${sample.length} chunks (keyword-weighted + positional).`, 59);
+  } else {
+    emit("sampling", `Selected ${sample.length} chunks for validation.`, 59);
+  }
+
+  // ── Step 5: Intent match check (local embeddings) ─────────────────────────
+  emit("intent-check", "Checking intent match (local embeddings)…", 63);
   const t3 = performance.now();
 
   const { similarity, needsLLMCheck } = await checkIntentMatch(queryForEmbedding, combinedSampleText);
@@ -231,6 +237,7 @@ export async function browserValidateUpload(
 
   timings.intentCheck = performance.now() - t3;
   emit("intent-check", `Intent: ${intentVerdict} (score: ${similarity.toFixed(3)})`, 70, intentReason);
+
 
   // ── Step 6: Quality scoring ─────────────────────────────────────────────────
   emit("quality-scoring", `Scoring ${sample.length} chunks for quality…`, 72);

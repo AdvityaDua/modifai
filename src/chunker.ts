@@ -12,6 +12,33 @@
 
 import type { Chunk } from "./types";
 
+// ─── Phase 3.1: Minimum quality filter ───────────────────────────────────────────
+
+const MIN_CHUNK_WORDS = 20;   // fewer than this is almost never meaningful content
+const MIN_CHUNK_CHARS = 100;  // absolute floor
+
+// Patterns that identify non-content chunks (headers, TOC lines, page numbers)
+const TOC_PATTERN    = /^(\d+\.?\s{1,5}.{3,60}\s+\d{1,4}\s*)+$/m;
+const HEADER_PATTERN = /^[A-Z][A-Z\s]{0,40}$/;    // e.g. "CHAPTER THREE"
+const PAGE_NUM_PATTERN = /^\s*\d{1,4}\s*$/;        // just a number
+
+/**
+ * Returns true if the chunk has enough substance to be worth scoring.
+ * Drops headers, page numbers, TOC lines, and anything under the word/char floor.
+ *
+ * ponytail: regex + word count — covers 95% of junk chunks with zero cost.
+ *   Add a perplexity check (small language model) if more precision is needed.
+ */
+function isSubstantiveChunk(text: string): boolean {
+  const t = text.trim();
+  if (t.length < MIN_CHUNK_CHARS) return false;
+  if (t.split(/\s+/).length < MIN_CHUNK_WORDS) return false;
+  if (PAGE_NUM_PATTERN.test(t)) return false;
+  if (HEADER_PATTERN.test(t)) return false;
+  if (TOC_PATTERN.test(t)) return false;
+  return true;
+}
+
 /** Roughly ~512 tokens — matches the rest of the ModifAI pipeline */
 const MAX_CHUNK_CHARS = 2000;
 
@@ -47,13 +74,22 @@ export function chunkText(
   const flushBuffer = () => {
     const text = buffer.trim();
     if (text.length > 0) {
-      chunks.push({
+      // Phase 3.1: drop non-substantive chunks before they enter the pipeline
+      if (!isSubstantiveChunk(text)) {
+        console.log(`[Chunker] Filtered chunk p${pageNumber}-c${idx} (too short / header / TOC): "${text.substring(0, 50)}..."`);
+        buffer = "";
+        return;
+      }
+      const chunk = {
         id: `p${pageNumber}-c${idx++}`,
         text,
         sourceType,
         confidence,
         pageNumber,
-      });
+      };
+      console.log(`[Chunker] Created chunk ${chunk.id} (${chunk.sourceType}, conf: ${chunk.confidence.toFixed(2)})`);
+      console.log(`          Text: "${chunk.text.substring(0, 60).replace(/\n/g, " ")}..."`);
+      chunks.push(chunk);
     }
     buffer = "";
   };
@@ -100,16 +136,23 @@ function splitBySentences(text: string): string[] {
   return groups;
 }
 
+// ─── Phase 3.2: Relevance-weighted sampling ────────────────────────────────────────
+
 /**
- * Stratified sampling: pick chunks spread evenly across the document
- * (beginning, middle, end) rather than randomly or all in one place.
+ * Hybrid sample: 60% by keyword relevance (for niche-content-in-large-doc use case),
+ * 40% by stratified position (to ensure beginning / middle / end coverage).
  *
- * Sample count uses sqrt-scaling with diminishing returns:
- *   sample_count = clamp(ceil(sqrt(total_pages)), min=3, max=15)
+ * Falls back to pure positional sampling when:
+ *  - no keywords provided, or
+ *  - no chunks score any keyword hits (completely off-topic document — will correctly
+ *    score as low intent match anyway)
  *
- * This keeps validation cost low regardless of document length.
+ * Sample count formula unchanged: clamp(ceil(sqrt(total_pages)), 3, 15)
+ *
+ * ponytail: keyword hit counting — instant, zero cost, covers the holistic-doc case.
+ *   Add embedding-based selection if keyword recall proves insufficient.
  */
-export function stratifiedSample(allChunks: Chunk[]): Chunk[] {
+export function stratifiedSample(allChunks: Chunk[], keywords: string[] = []): Chunk[] {
   if (allChunks.length === 0) return [];
 
   const totalPages = new Set(allChunks.map((c) => c.pageNumber)).size;
@@ -117,15 +160,47 @@ export function stratifiedSample(allChunks: Chunk[]): Chunk[] {
 
   if (allChunks.length <= sampleCount) return allChunks;
 
-  // Even step across the full chunk array for stratification
-  const step = allChunks.length / sampleCount;
-  const sampled: Chunk[] = [];
+  // ── Positional baseline (always computed) ──────────────────────────────────
+  const positionalCount = keywords.length > 0 ? Math.ceil(sampleCount * 0.4) : sampleCount;
+  const step = allChunks.length / positionalCount;
+  const positional = Array.from({ length: positionalCount }, (_, i) =>
+    allChunks[Math.floor(i * step)]
+  );
 
-  for (let i = 0; i < sampleCount; i++) {
-    sampled.push(allChunks[Math.floor(i * step)]);
+  if (keywords.length === 0) return positional;
+
+  // ── Keyword relevance scoring ─────────────────────────────────────────────
+  const normalised = keywords.map((k) => k.toLowerCase());
+
+  const scored = allChunks.map((chunk) => {
+    const lower = chunk.text.toLowerCase();
+    const hits = normalised.reduce((n, kw) => n + (lower.includes(kw) ? 1 : 0), 0);
+    return { chunk, hits };
+  });
+
+  const topHits = scored
+    .filter((s) => s.hits > 0)
+    .sort((a, b) => b.hits - a.hits);
+
+  // No keyword matches at all — fall back to pure positional
+  if (topHits.length === 0) {
+    console.log("[Chunker] No keyword matches — falling back to positional sampling.");
+    const fallbackStep = allChunks.length / sampleCount;
+    return Array.from({ length: sampleCount }, (_, i) => allChunks[Math.floor(i * fallbackStep)]);
   }
 
-  return sampled;
+  const relevantCount = sampleCount - positionalCount;
+  const relevant = topHits.slice(0, relevantCount).map((s) => s.chunk);
+
+  // Merge, deduplicate by id
+  const seen = new Set<string>();
+  const merged: Chunk[] = [];
+  for (const c of [...relevant, ...positional]) {
+    if (!seen.has(c.id)) { seen.add(c.id); merged.push(c); }
+  }
+
+  console.log(`[Chunker] Sample: ${relevant.length} keyword-matched + ${positional.length} positional = ${merged.length} unique chunks.`);
+  return merged;
 }
 
 /**

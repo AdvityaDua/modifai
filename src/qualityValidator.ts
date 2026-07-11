@@ -11,7 +11,64 @@
  * (Not once per chunk in the whole document — only the stratified sample.)
  */
 
-import type { QualityResult, DocumentType } from "./types";
+import type { QualityResult, DocumentType, ChunkPreScreenResult } from "./types";
+
+// ─── Phase 3.3: Deterministic pre-screen ────────────────────────────────────────
+
+// Ratio of non-alphanumeric, non-whitespace chars that indicates garbled OCR
+const NOISE_CHAR_RATIO_THRESHOLD = 0.20;
+// Minimum word count for a chunk to be worth an LLM call
+const MIN_WORDS_FOR_LLM = 15;
+// OCR confidence below this → auto-fail without LLM
+const MIN_OCR_CONFIDENCE = 0.35;
+
+/**
+ * Deterministic pre-screen — runs before every LLM quality scoring call.
+ *
+ * Three fast checks, in order of cheapness:
+ *  1. Word count floor  — < 15 words → clearly too sparse, auto-score 10
+ *  2. Noise char ratio  — >20% garbage chars → garbled OCR, auto-score 5
+ *  3. OCR confidence   — Tesseract < 35% → very low confidence, auto-score 15
+ *
+ * Chunks that pass all three go to the LLM scorer as normal.
+ *
+ * ponytail: three regex + arithmetic checks, zero cost.
+ *   Add Shannon entropy check if garbled-but-lowercase text slips through.
+ */
+export function preScreenChunk(
+  text: string,
+  ocrConfidence: number  // 0–1; pass 1.0 for text-native pages
+): ChunkPreScreenResult {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+
+  // 1. Too sparse to score meaningfully
+  if (words.length < MIN_WORDS_FOR_LLM) {
+    return { skip: true, autoScore: 10, skipReason: "Chunk too sparse for quality scoring (< 15 words)." };
+  }
+
+  // 2. Noise character ratio (garbage OCR output)
+  const nonAlphaNum = (text.match(/[^\w\s]/g) || []).length;
+  const noiseRatio = nonAlphaNum / (text.length || 1);
+  if (noiseRatio > NOISE_CHAR_RATIO_THRESHOLD) {
+    return {
+      skip: true,
+      autoScore: 5,
+      skipReason: `High noise character ratio (${(noiseRatio * 100).toFixed(0)}%) — likely garbled OCR output.`,
+    };
+  }
+
+  // 3. Very low Tesseract confidence (OCR pages only)
+  if (ocrConfidence < MIN_OCR_CONFIDENCE) {
+    return {
+      skip: true,
+      autoScore: 15,
+      skipReason: `Very low OCR confidence (${(ocrConfidence * 100).toFixed(0)}%) — text extraction may be unreliable.`,
+    };
+  }
+
+  return { skip: false, autoScore: 0, skipReason: "" };
+}
+
 
 // ─── Document-type-aware rubric ────────────────────────────────────────────
 
@@ -127,13 +184,29 @@ export async function scoreAllChunks(
 ): Promise<Array<{ chunkId: string; qualityScore: number; extractionConfidence: number; issues: string[] }>> {
   const results = await Promise.all(
     chunks.map(async (chunk, i) => {
-      const quality = await scoreChunkQuality(chunk.text, apiKey, docType);
-      if (onChunkScored) onChunkScored(i + 1, chunks.length, quality.score);
+      // Phase 3.3: run deterministic pre-screen before spending an LLM call
+      const preScreen = preScreenChunk(chunk.text, chunk.confidence);
+
+      let qualityScore: number;
+      let issues: string[];
+
+      if (preScreen.skip) {
+        // Short-circuit: no LLM call, log the reason
+        qualityScore = preScreen.autoScore;
+        issues = [preScreen.skipReason];
+        console.log(`[qualityValidator] Pre-screen skipped chunk ${chunk.id}: ${preScreen.skipReason}`);
+      } else {
+        const quality = await scoreChunkQuality(chunk.text, apiKey, docType);
+        qualityScore = quality.score;
+        issues = quality.issues;
+      }
+
+      if (onChunkScored) onChunkScored(i + 1, chunks.length, qualityScore);
       return {
         chunkId: chunk.id,
-        qualityScore: quality.score,
+        qualityScore,
         extractionConfidence: chunk.confidence,
-        issues: quality.issues,
+        issues,
       };
     })
   );

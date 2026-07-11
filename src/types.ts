@@ -165,3 +165,19 @@ export interface ExpandedIntent {
 
 /** Detected document content type — drives quality rubric selection in Module E */
 export type DocumentType = "prose" | "technical-code" | "statistical" | "legal" | "mixed";
+
+// ─── Phase 3: Chunk Quality Gating ──────────────────────────────────────────
+
+/**
+ * Result of the deterministic pre-screen applied to each chunk before LLM scoring.
+ * Skipped chunks still get a score entry so the aggregator sees the full picture.
+ */
+export interface ChunkPreScreenResult {
+  /** If true, skip the LLM call and use autoScore directly */
+  skip: boolean;
+  /** Score to use when skipping (0-100) */
+  autoScore: number;
+  /** Human-readable reason shown in the issues list */
+  skipReason: string;
+}
+
