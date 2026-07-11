@@ -807,6 +807,16 @@
       .drop-title, .drop-subtitle { display: none; }
       .btn-browse { display: inline-block; }
     }
+    /* Phase 4.4: mobile collapsible chunk rows */
+    .chunk-detail-row { display: none; }
+    @media (max-width: 768px) {
+      .chunk-row-toggle { cursor: pointer; user-select: none; }
+      .chunk-row-toggle::after { content: " +"; font-size:0.75rem; color: var(--text-secondary); }
+      .chunk-row-toggle.open::after { content: " -"; }
+      .chunk-detail-row { display: none; }
+      .chunk-detail-row.open { display: table-row; }
+      .chunk-detail-row td { font-size: 0.78rem; color: var(--text-secondary); padding: 4px 10px 8px; }
+    }
   </style>
 </head>
 
@@ -915,11 +925,18 @@
         <!-- Phase 2.1: Vagueness warning -->
         <div id="vagueness-warning" style="display:none; margin-top:10px; padding:10px 14px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.35); border-radius:8px; font-size:0.83rem; color:#f59e0b;">
           <strong>&#128161; Tip:</strong> <span id="vagueness-suggestion"></span>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="btn-use-suggestion" style="background:rgba(245,158,11,0.2); border:1px solid rgba(245,158,11,0.5); color:#f59e0b; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem; font-weight:600;">Use suggestion</button>
+            <button id="btn-keep-mine" style="background:transparent; border:1px solid rgba(245,158,11,0.35); color:#f59e0b; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">Keep mine</button>
+          </div>
         </div>
       </div>
       <!-- Phase 2.2: Intent expansion card -->
       <div id="intent-expansion-card" style="display:none; margin-top:14px; padding:14px 18px; background:rgba(99,102,241,0.07); border:1px solid rgba(99,102,241,0.3); border-radius:10px; font-size:0.84rem;">
-        <div style="font-weight:600; color:var(--text-primary); margin-bottom:8px;">&#129504; Here&rsquo;s what we understood</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div style="font-weight:600; color:var(--text-primary);">&#129504; Here&rsquo;s what we understood</div>
+          <button id="btn-edit-intent" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); padding:3px 10px; border-radius:4px; cursor:pointer; font-size:0.78rem;">&#9998; Edit</button>
+        </div>
         <div style="display:grid; gap:5px; color:var(--text-secondary);">
           <div><strong>Domain:</strong> <span id="exp-domain"></span></div>
           <div><strong>Use case:</strong> <span id="exp-use-case"></span></div>
@@ -1206,6 +1223,31 @@
         warningEl.style.display = "none";
       }
     });
+
+    // "Use suggestion" → replace intent text with a richer example, dismiss warning
+    document.getElementById("btn-use-suggestion").addEventListener("click", () => {
+      const domain = document.getElementById("exp-domain")?.textContent?.trim();
+      // Build a concrete suggestion: if expansion card has a domain, use it; else offer a generic example
+      const suggestion = domain
+        ? `I want to build an assistant that can answer questions about ${domain}.`
+        : "I want to build an assistant that handles customer support queries for an e-commerce store, including product returns, shipping status, and refund policy.";
+      intentInput.value = suggestion;
+      document.getElementById("vagueness-warning").style.display = "none";
+      intentInput.dispatchEvent(new Event("input"));
+      updateRunBtn();
+    });
+
+    // "Keep mine" → just dismiss the warning
+    document.getElementById("btn-keep-mine").addEventListener("click", () => {
+      document.getElementById("vagueness-warning").style.display = "none";
+    });
+
+    // "Edit" on the expansion card → focus the intent field, hide the card so user can update
+    document.getElementById("btn-edit-intent").addEventListener("click", () => {
+      document.getElementById("intent-expansion-card").style.display = "none";
+      intentInput.focus();
+      intentInput.select();
+    });
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Pipeline step definitions
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1408,10 +1450,10 @@
 
     async function getEmbedder() {
       if (embedder) return embedder;
-      addLog("Loading MiniLM embedding model (first run â€” may take a moment)â€¦");
+      addLog("Loading MiniLM embedding model (first run — may take a moment)…");
       const pipeline = transformersPipeline || (await loadTransformers());
       embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-      addLog("Embedding model loaded âœ“", "done");
+      addLog("Embedding model loaded ✓", "done");
       return embedder;
     }
 
@@ -1456,9 +1498,9 @@
       catch { return { verdict: "partial", reason: "Could not parse LLM response." }; }
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Module E â€” Quality scoring
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ————————————————————————————————————————————————————————————————————————————————
+    // Module E — Quality scoring
+    // ————————————————————————————————————————————————————————————————————————————————
     async function scoreChunkQuality(chunkText, apiKey) {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -1631,11 +1673,19 @@
           25, `${ocrPages.length} page(s) flagged for OCR`);
         addLog(`Classification done in ${timings.pdfLoad.toFixed(0)}ms`, "done");
 
-        // â”€â”€ Step 2: OCR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // -- Step 2: OCR
         const t1 = performance.now();
         const ocrResults = new Map();
 
-        if (ocrPages.length > 0 && Tesseract) {
+        // Phase 4.3 partial cache: same file hash -> skip Tesseract, reuse cached OCR results
+        const _cachedEntry = window.currentFileHash ? getCacheEntry(window.currentFileHash) : null;
+        const _cachedOcr = _cachedEntry && _cachedEntry.ocrResults && _cachedEntry.ocrResults.length > 0;
+        if (_cachedOcr) {
+          emit("ocr", `OCR results restored from cache (${_cachedEntry.ocrResults.length} page(s) saved).`, 45, "Cache hit - skipping re-scan");
+          updateStep("ocr", "Restored from cache.", null, "done");
+          _cachedEntry.ocrResults.forEach(r => ocrResults.set(r.pageNumber, r));
+          addLog(`OCR cache hit - skipped Tesseract on ${_cachedEntry.ocrResults.length} page(s)`, "done");
+        } else if (ocrPages.length > 0 && Tesseract) {
           let ocrTotalMs = 0;
           for (let i = 0; i < ocrPages.length; i++) {
             const pageStart = performance.now();
@@ -1645,7 +1695,7 @@
               const avgMs = ocrTotalMs / i;
               estMs = avgMs * (ocrPages.length - i);
             }
-            emit("ocr", `OCR: page ${ocrPage.pageNumber} (${i+1}/${ocrPages.length})…`,
+            emit("ocr", `OCR: page ${ocrPage.pageNumber} (${i+1}/${ocrPages.length})...`,
               25 + Math.round(((i + 0.5) / ocrPages.length) * 20),
               { currentPage: i+1, totalPages: ocrPages.length, estMs });
             try {
@@ -1661,10 +1711,10 @@
           }
         } else if (ocrPages.length > 0) {
           emit("ocr", `${ocrPages.length} page(s) need OCR but Tesseract failed to load.`, 45);
-          addLog("Tesseract unavailable â€” OCR skipped.", "error");
+          addLog("Tesseract unavailable - OCR skipped.", "error");
         } else {
-          emit("ocr", "No pages need OCR â€” all text-native.", 45, "Skipping OCR entirely âœ“");
-          updateStep("ocr", "Skipped â€” all text-native.", null, "done");
+          emit("ocr", "No pages need OCR - all text-native.", 45, "Skipping OCR entirely");
+          updateStep("ocr", "Skipped - all text-native.", null, "done");
         }
 
         timings.ocr = performance.now() - t1;
@@ -1932,15 +1982,13 @@
 
       // Chunks table
       const tbody = document.getElementById("chunk-tbody");
-      tbody.innerHTML = scoredChunks.map(c => `
-        <tr>
-          <td style="font-family:monospace">${c.chunkId}</td>
-          <td>${c.extractionConfidence === 1 ? "Native" : "OCR"}</td>
-          <td>${c.qualityScore}</td>
-          <td><div style="width:100%;background:var(--bg-secondary);height:8px;border-radius:4px"><div style="width:${c.qualityScore}%;background:var(--accent1);height:100%;border-radius:4px"></div></div></td>
-          <td>${c.extractionConfidence === 1 ? "-" : (c.extractionConfidence*100).toFixed(0)+"%"}</td>
-        </tr>
-      `).join("");
+      tbody.innerHTML = scoredChunks.map((c, idx) => {
+        const isMobile = window.innerWidth <= 768;
+        const detailHtml = isMobile ? `<tr class="chunk-detail-row" id="chunk-detail-${idx}"><td colspan="2"><strong>Source:</strong> ${c.extractionConfidence === 1 ? "Native" : "OCR"} &nbsp;|&nbsp;<strong>Conf:</strong> ${c.extractionConfidence === 1 ? "-" : (c.extractionConfidence*100).toFixed(0)+"%"} &nbsp;|&nbsp;<strong>Issues:</strong> ${(c.issues||[]).join(", ") || "None"}</td></tr>` : "";
+        const rowId = `chunk-detail-${idx}`;
+        const toggleFn = `this.classList.toggle("open"); const d=document.getElementById("${rowId}"); if(d) d.classList.toggle("open");`;
+        return `<tr class="chunk-row-toggle" onclick="${toggleFn}"><td style="font-family:monospace">${c.chunkId}</td><td class="mobile-hide-col">${c.extractionConfidence === 1 ? "Native" : "OCR"}</td><td>${c.qualityScore}</td><td class="mobile-hide-col"><div style="width:100%;background:var(--bg-secondary);height:8px;border-radius:4px"><div style="width:${c.qualityScore}%;background:var(--accent1);height:100%;border-radius:4px"></div></div></td><td class="mobile-hide-col">${c.extractionConfidence === 1 ? "-" : (c.extractionConfidence*100).toFixed(0)+"%"}</td></tr>${detailHtml}`;
+      }).join("");
 
       // Issues
       if (allIssues && allIssues.length > 0) {

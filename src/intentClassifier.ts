@@ -80,6 +80,9 @@ Expand this into a structured JSON object. Be specific and domain-aware.
 
 Respond ONLY with valid JSON. No markdown, no extra text.`;
 
+// ponytail: plain Map — session-lived, same intent = free hit, no TTL needed.
+const _expandCache = new Map<string, ExpandedIntent>();
+
 /**
  * Expand the user's raw intent into a structured ExpandedIntent object via one LLM call.
  *
@@ -90,6 +93,13 @@ export async function expandIntent(
   userIntent: string,
   apiKey: string
 ): Promise<ExpandedIntent | null> {
+  // Cache hit — skip LLM call
+  const cached = _expandCache.get(userIntent.trim());
+  if (cached) {
+    console.log("[intentClassifier] expandIntent cache hit — reusing previous result.");
+    return cached;
+  }
+
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -122,6 +132,7 @@ export async function expandIntent(
       return null;
     }
 
+    _expandCache.set(userIntent.trim(), parsed);
     return parsed;
   } catch (err) {
     console.warn("[intentClassifier] expandIntent failed, using raw intent.", err);

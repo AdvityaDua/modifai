@@ -168,6 +168,18 @@ Respond ONLY with valid JSON (no markdown, no extra text):
   }
 }
 
+
+// ── Phase 3.3 (Jaccard) ──────────────────────────────────────────────────────
+// ponytail: Set intersection, O(n²) over sample (≤15 chunks). Upgrade to
+//   MinHash if sample sizes grow beyond ~50.
+function jaccardSimilarity(a: string, b: string): number {
+  const setA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
+  const setB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+  let intersection = 0;
+  for (const w of setA) if (setB.has(w)) intersection++;
+  return intersection / (setA.size + setB.size - intersection || 1);
+}
+
 /**
  * Score multiple chunks in parallel (one LLM call each).
  * For a handful of sampled chunks this is fine; larger batches should be rate-limited.
@@ -182,6 +194,9 @@ export async function scoreAllChunks(
   onChunkScored?: (index: number, total: number, score: number) => void,
   docType: DocumentType = "prose"  // Phase 2.3: passed from orchestrator
 ): Promise<Array<{ chunkId: string; qualityScore: number; extractionConfidence: number; issues: string[] }>> {
+  // Scored so far — used for Jaccard dedup
+  const scored: Array<{ text: string; qualityScore: number; issues: string[] }> = [];
+
   const results = await Promise.all(
     chunks.map(async (chunk, i) => {
       // Phase 3.3: run deterministic pre-screen before spending an LLM call
@@ -196,11 +211,20 @@ export async function scoreAllChunks(
         issues = [preScreen.skipReason];
         console.log(`[qualityValidator] Pre-screen skipped chunk ${chunk.id}: ${preScreen.skipReason}`);
       } else {
-        const quality = await scoreChunkQuality(chunk.text, apiKey, docType);
-        qualityScore = quality.score;
-        issues = quality.issues;
+        // Phase 3.3 Jaccard: check against already-scored chunks
+        const duplicate = scored.find(s => jaccardSimilarity(chunk.text, s.text) > 0.80);
+        if (duplicate) {
+          qualityScore = duplicate.qualityScore;
+          issues = ["Near-duplicate of another chunk — score reused, LLM call skipped."];
+          console.log(`[qualityValidator] Jaccard duplicate — chunk ${chunk.id} reuses score ${qualityScore}`);
+        } else {
+          const quality = await scoreChunkQuality(chunk.text, apiKey, docType);
+          qualityScore = quality.score;
+          issues = quality.issues;
+        }
       }
 
+      scored.push({ text: chunk.text, qualityScore, issues });
       if (onChunkScored) onChunkScored(i + 1, chunks.length, qualityScore);
       return {
         chunkId: chunk.id,
@@ -212,3 +236,4 @@ export async function scoreAllChunks(
   );
   return results;
 }
+
