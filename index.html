@@ -857,16 +857,30 @@
       </div>
 
       <div class="input-group">
-        <label class="input-label" for="intent-input">Your intent â€” what do you want to build?</label>
+        <label class="input-label" for="intent-input">Your intent &mdash; what do you want to build?</label>
         <input
           type="text"
           id="intent-input"
           class="input-field"
-          placeholder='e.g. "I want to build an HR policy assistant"'
+          placeholder='e.g. "I want to build an HR policy assistant for employee onboarding"'
           autocomplete="off"
           spellcheck="false"
         />
-        <div class="input-hint">The document will be checked against this goal.</div>
+        <div class="input-hint">Be specific &mdash; include the domain and what kind of questions the assistant should answer.</div>
+        <!-- Phase 2.1: Vagueness warning -->
+        <div id="vagueness-warning" style="display:none; margin-top:10px; padding:10px 14px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.35); border-radius:8px; font-size:0.83rem; color:#f59e0b;">
+          <strong>&#128161; Tip:</strong> <span id="vagueness-suggestion"></span>
+        </div>
+      </div>
+      <!-- Phase 2.2: Intent expansion card -->
+      <div id="intent-expansion-card" style="display:none; margin-top:14px; padding:14px 18px; background:rgba(99,102,241,0.07); border:1px solid rgba(99,102,241,0.3); border-radius:10px; font-size:0.84rem;">
+        <div style="font-weight:600; color:var(--text-primary); margin-bottom:8px;">&#129504; Here&rsquo;s what we understood</div>
+        <div style="display:grid; gap:5px; color:var(--text-secondary);">
+          <div><strong>Domain:</strong> <span id="exp-domain"></span></div>
+          <div><strong>Use case:</strong> <span id="exp-use-case"></span></div>
+          <div><strong>Expected content:</strong> <span id="exp-content-types"></span></div>
+          <div><strong>Matching on:</strong> <span id="exp-keywords" style="font-style:italic;"></span></div>
+        </div>
       </div>
 
       <!-- API key is injected server-side from .env â€” not exposed to the UI -->
@@ -1064,6 +1078,26 @@
     }
     intentInput.addEventListener("input", updateRunBtn);
 
+    // Phase 2.1: Vagueness warning on blur
+    const GENERIC_TERMS_UI = new Set(["chatbot","assistant","ai","smart","helpful","automation","tool","bot","system","app","application","solution","service"]);
+    function isIntentVague(val) {
+      const words = val.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (words.length < 4) return "Add more detail — describe the specific topic or domain, not just the type of tool.";
+      if (words.every(w => GENERIC_TERMS_UI.has(w))) return "Your description uses only general terms. Add the specific subject area (e.g. employee onboarding, product returns, API reference).";
+      if (!words.some(w => w.length > 4 && !GENERIC_TERMS_UI.has(w))) return "Include a domain keyword — what specific topic should the assistant know about?";
+      return "";
+    }
+    intentInput.addEventListener("blur", () => {
+      const warn = isIntentVague(intentInput.value);
+      const warningEl = document.getElementById("vagueness-warning");
+      const suggEl = document.getElementById("vagueness-suggestion");
+      if (warn && intentInput.value.trim().length > 0) {
+        suggEl.textContent = warn;
+        warningEl.style.display = "block";
+      } else {
+        warningEl.style.display = "none";
+      }
+    });
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Pipeline step definitions
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1382,6 +1416,17 @@
         addLog(message, "active");
         if (detail) addLog("  â†’ " + detail);
         // Mark previous stages as done
+        // Phase 2: populate intent expansion card when orchestrator emits it
+        if (stage === "intent-check" && message && message.includes("Intent understood")) {
+          const domainMatch = message.match(/Domain:\s*([^|]+)/);
+          const useCaseMatch = message.match(/Use case:\s*(.+)/);
+          if (domainMatch) document.getElementById("exp-domain").textContent = domainMatch[1].trim();
+          if (useCaseMatch) document.getElementById("exp-use-case").textContent = useCaseMatch[1].trim();
+          if (detail && detail.startsWith("Keywords:")) {
+            document.getElementById("exp-keywords").textContent = detail.replace("Keywords:", "").trim();
+          }
+          document.getElementById("intent-expansion-card").style.display = "block";
+        }
         const idx = STAGES.findIndex(s => s.key === stage);
         for (let i = 0; i < idx; i++) {
           const prevEl = document.getElementById(`step-${STAGES[i].key}`);
@@ -1731,6 +1776,8 @@
       fileInfoEl.style.display = "none";
       dropZone.classList.remove("has-file");
       intentInput.value = "";
+      document.getElementById("intent-expansion-card").style.display = "none";
+      document.getElementById("vagueness-warning").style.display = "none";
       progressSec.style.display = "none";
       resultsSec.style.display = "none";
       resetBtn.style.display = "none";

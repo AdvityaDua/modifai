@@ -7,7 +7,7 @@
  * This is the single biggest cost/time saver in the whole design.
  */
 
-import type { PageClassification, PageResult } from "./types";
+import type { PageClassification, PageResult, DocumentType } from "./types";
 
 // pdfjs-dist is loaded dynamically to support both Node.js and browser environments.
 // In the browser, it's loaded via CDN in index.html.
@@ -124,4 +124,51 @@ export async function renderPageToCanvas(
   page.cleanup();
 
   return canvas;
+}
+
+// ─── Phase 2.3: Document Type Detection ──────────────────────────────────────
+
+/**
+ * Classify the overall content type of the document from a text sample.
+ * Drives rubric selection in qualityValidator.ts (Module E).
+ *
+ * Strategy: signal counting on regex patterns — fast, deterministic, zero cost.
+ * The thresholds are deliberately loose so mixed documents are caught early.
+ *
+ * ponytail: regex signal counting — covers the common cases for our target user base.
+ *   Add ML-based classification (small FastText model) if precision matters more than speed.
+ */
+export function detectDocumentType(extractedText: string): DocumentType {
+  if (!extractedText || extractedText.length < 50) return "prose";
+
+  const text = extractedText.slice(0, 5000).toLowerCase();
+  const nonWS = text.replace(/\s/g, "").length || 1;
+
+  // Code signals: keywords + punctuation patterns common in source code / technical docs
+  const codeSignals = (text.match(
+    /\bfunction\b|\bconst\b|\bimport\b|\bclass\b|\breturn\b|=>|```|\bdef\b|\bvar\b|\blet\b/g
+  ) || []).length;
+
+  // Statistical signals: p-values, n=, figure/table references, mean/std
+  const statSignals = (text.match(
+    /p\s*[<>]\s*0\.\d|\bmean\b|\bstd\b|n\s*=\s*\d+|figure\s+\d|table\s+\d|p-value|\bsd\b|\bci\b/g
+  ) || []).length;
+
+  // Legal signals: contract / legal document vocabulary
+  const legalSignals = (text.match(
+    /\bwhereas\b|\bhereinafter\b|\bnotwithstanding\b|\bpursuant\b|\bindemnif/g
+  ) || []).length;
+
+  const total = codeSignals + statSignals + legalSignals;
+
+  // Mixed: has notable signals from more than one category
+  if (total > 15 && codeSignals > 3 && statSignals > 3) return "mixed";
+
+  // Dominant signal wins if it clears the threshold
+  const density = total / nonWS * 100;
+  if (codeSignals > 8 || (codeSignals > 3 && density > 0.05))  return "technical-code";
+  if (statSignals > 6 || (statSignals > 2 && density > 0.04))  return "statistical";
+  if (legalSignals > 4)                                         return "legal";
+
+  return "prose";
 }

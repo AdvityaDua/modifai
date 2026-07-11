@@ -139,3 +139,29 @@ export interface LangDetectResult {
   /** True if we detected a specific supported language */
   confident: boolean;
 }
+
+// ─── Phase 2: Intent Intelligence ───────────────────────────────────────────
+
+/** Result of the deterministic vagueness check — runs before any LLM call */
+export interface VaguenessResult {
+  vague: boolean;
+  reason: "too_short" | "all_generic" | "no_domain" | "ok";
+  /** One-line suggestion to show in the UI, or empty string if not vague */
+  suggestion: string;
+}
+
+/**
+ * Structured intent produced by the LLM expansion call (Phase 2.2).
+ * Used downstream for: refined embedding comparison, keyword-weighted sampling,
+ * document-type-aware quality rubric, and the UI confirmation card.
+ */
+export interface ExpandedIntent {
+  domain: string;
+  use_case: string;
+  expected_content_types: string[];
+  refined_query: string;
+  document_keywords: string[];
+}
+
+/** Detected document content type — drives quality rubric selection in Module E */
+export type DocumentType = "prose" | "technical-code" | "statistical" | "legal" | "mixed";

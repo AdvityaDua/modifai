@@ -8,7 +8,127 @@
  * Clear matches (>0.7) and clear mismatches (<0.4) never trigger an LLM call.
  */
 
-import type { IntentVerdict, IntentCheckResult, LLMIntentResult } from "./types";
+import type { IntentVerdict, IntentCheckResult, LLMIntentResult, VaguenessResult, ExpandedIntent } from "./types";
+
+// ─── Vagueness detection ─────────────────────────────────────────────────────
+
+const GENERIC_TERMS = new Set([
+  "chatbot", "assistant", "ai", "smart", "helpful", "automation",
+  "tool", "bot", "system", "app", "application", "solution", "service",
+]);
+
+/**
+ * Deterministic vagueness check — runs in-browser with zero cost, before any LLM call.
+ * Returns a suggestion only when vague; the orchestrator shows it as a soft warning, not a block.
+ *
+ * ponytail: word-list + length heuristic — covers the vast majority of under-specified intents.
+ *   Add semantic vagueness detection (embed + compare to a "generic" centroid) if false-negative
+ *   rate becomes a problem in production.
+ */
+export function checkIntentVagueness(intent: string): VaguenessResult {
+  const trimmed = intent.trim();
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+
+  if (words.length < 4) {
+    return {
+      vague: true,
+      reason: "too_short",
+      suggestion:
+        "Add more detail. For example: instead of \"HR assistant\", try \"an assistant that answers employee questions about leave policy and onboarding procedures\".",
+    };
+  }
+
+  const isAllGeneric = words.every((w) => GENERIC_TERMS.has(w));
+  if (isAllGeneric) {
+    return {
+      vague: true,
+      reason: "all_generic",
+      suggestion:
+        "Your description uses only general terms. Add the specific topic or domain — what kind of questions should this assistant answer?",
+    };
+  }
+
+  // Require at least one word > 4 chars that isn't a generic term (a real domain noun)
+  const hasSubstantiveWord = words.some((w) => w.length > 4 && !GENERIC_TERMS.has(w));
+  if (!hasSubstantiveWord) {
+    return {
+      vague: true,
+      reason: "no_domain",
+      suggestion:
+        "Include the specific subject area. For example: \"customer returns\", \"employee handbook\", \"API documentation\", \"financial reports\".",
+    };
+  }
+
+  return { vague: false, reason: "ok", suggestion: "" };
+}
+
+// ─── Intent expansion ────────────────────────────────────────────────────────
+
+const EXPANSION_PROMPT = (intent: string) => `\
+A user wants to build an AI assistant from a document they will upload.
+Their description: "${intent}"
+
+Expand this into a structured JSON object. Be specific and domain-aware.
+
+{
+  "domain": "the specific subject area (e.g. HR policy, e-commerce returns, Python API docs)",
+  "use_case": "one sentence: what will the assistant do for the end user",
+  "expected_content_types": ["2-4 types of content the source document should contain"],
+  "refined_query": "a single sentence describing what an ideal source document looks like — use domain-specific vocabulary",
+  "document_keywords": ["6-8 keywords likely to appear in a matching document"]
+}
+
+Respond ONLY with valid JSON. No markdown, no extra text.`;
+
+/**
+ * Expand the user's raw intent into a structured ExpandedIntent object via one LLM call.
+ *
+ * Returns null if the API call fails — callers should fall back to using the raw intent string.
+ * The refined_query replaces the raw intent for embedding; document_keywords feed Phase 3 sampling.
+ */
+export async function expandIntent(
+  userIntent: string,
+  apiKey: string
+): Promise<ExpandedIntent | null> {
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3.1-8b-instruct",
+        messages: [{ role: "user", content: EXPANSION_PROMPT(userIntent) }],
+        max_tokens: 300,
+        temperature: 0.2,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const raw = data.choices[0].message.content.trim();
+    const cleaned = raw.replace(/```(?:json)?|```/g, "").trim();
+    const parsed = JSON.parse(cleaned) as ExpandedIntent;
+
+    // Validate required fields — defensive against partial LLM responses
+    if (
+      typeof parsed.domain !== "string" ||
+      typeof parsed.refined_query !== "string" ||
+      !Array.isArray(parsed.document_keywords)
+    ) {
+      console.warn("[intentClassifier] expandIntent: unexpected shape, falling back.", parsed);
+      return null;
+    }
+
+    return parsed;
+  } catch (err) {
+    console.warn("[intentClassifier] expandIntent failed, using raw intent.", err);
+    return null;
+  }
+}
+
 
 // Singleton embedder — loaded once, reused across calls
 let embedder: any = null;

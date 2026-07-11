@@ -11,7 +11,41 @@
  * (Not once per chunk in the whole document — only the stratified sample.)
  */
 
-import type { QualityResult } from "./types";
+import type { QualityResult, DocumentType } from "./types";
+
+// ─── Document-type-aware rubric ────────────────────────────────────────────
+
+function rubricForDocType(docType: DocumentType): string {
+  switch (docType) {
+    case "technical-code":
+      return `Rate this technical document excerpt (0–100) on:
+1. Completeness: does it fully explain the concept, function, or API being described?
+2. Accuracy signals: does it use precise technical terminology and concrete examples?
+3. Structure: is it logically organised (not garbled, not truncated mid-sentence)?
+Do NOT penalise for low narrative readability — code and technical references are not prose.`;
+
+    case "statistical":
+      return `Rate this research/statistical document excerpt (0–100) on:
+1. Data completeness: are variables, sample sizes, or methods described?
+2. Precision: does it use defined statistical terms (mean, p-value, CI, etc.) correctly?
+3. Coherence: is it free of garbled text or encoding errors?
+Do NOT penalise for dense notation or non-narrative style.`;
+
+    case "legal":
+      return `Rate this legal document excerpt (0–100) on:
+1. Clause completeness: are obligations, conditions, or parties clearly defined?
+2. Specificity: are terms defined and not left vague?
+3. Readability: is it free of garbled OCR or encoding errors?
+Do NOT penalise for formal legal language or sentence length.`;
+
+    default: // prose, mixed
+      return `Rate this document excerpt (0–100) on:
+1. Specificity: is it specific and detailed, not vague boilerplate?
+2. Grounding: does it contain real facts, procedures, or domain knowledge — not just filler?
+3. Readability: is it well-formatted, not garbled OCR noise or encoding errors?`;
+  }
+}
+
 
 /**
  * Score a single chunk's quality using the LLM rubric.
@@ -22,7 +56,8 @@ import type { QualityResult } from "./types";
  */
 export async function scoreChunkQuality(
   chunkText: string,
-  apiKey: string
+  apiKey: string,
+  docType: DocumentType = "prose"  // Phase 2.3: rubric adapts to document type
 ): Promise<QualityResult> {
   const truncated = chunkText.slice(0, 2000); // cap input tokens
 
@@ -37,13 +72,10 @@ export async function scoreChunkQuality(
       messages: [
         {
           role: "user",
-          content: `Rate this document excerpt from 0–100 on three dimensions:
-1. Specificity (is it specific and detailed, not vague boilerplate?)
-2. Grounding (does it contain real facts, procedures, or domain knowledge — not just filler?)
-3. Readability (is it well-formatted, not garbled OCR noise or encoding errors?)
+          content: `${rubricForDocType(docType)}
 
 Combine these into a single overall score from 0–100.
-Also list up to 3 specific issues you found (or an empty array if there are none).
+Also list up to 3 specific issues found (or an empty array if there are none).
 
 Excerpt:
 """${truncated}"""
@@ -90,11 +122,12 @@ Respond ONLY with valid JSON (no markdown, no extra text):
 export async function scoreAllChunks(
   chunks: { id: string; text: string; confidence: number }[],
   apiKey: string,
-  onChunkScored?: (index: number, total: number, score: number) => void
+  onChunkScored?: (index: number, total: number, score: number) => void,
+  docType: DocumentType = "prose"  // Phase 2.3: passed from orchestrator
 ): Promise<Array<{ chunkId: string; qualityScore: number; extractionConfidence: number; issues: string[] }>> {
   const results = await Promise.all(
     chunks.map(async (chunk, i) => {
-      const quality = await scoreChunkQuality(chunk.text, apiKey);
+      const quality = await scoreChunkQuality(chunk.text, apiKey, docType);
       if (onChunkScored) onChunkScored(i + 1, chunks.length, quality.score);
       return {
         chunkId: chunk.id,

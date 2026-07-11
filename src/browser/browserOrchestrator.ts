@@ -16,15 +16,15 @@
  *  7. Aggregate + decide
  */
 
-import { loadAndClassifyPdf, renderPageToCanvas } from "../pdfLoader";
+import { loadAndClassifyPdf, renderPageToCanvas, detectDocumentType } from "../pdfLoader";
 import { preprocessCanvas, runOcrOnPage } from "../ocrProcessor";
 import { buildAllChunks, stratifiedSample } from "../chunker";
-import { checkIntentMatch, llmIntentVerdict, similarityToVerdict } from "../intentClassifier";
+import { checkIntentMatch, llmIntentVerdict, similarityToVerdict, checkIntentVagueness, expandIntent } from "../intentClassifier";
 import { scoreAllChunks } from "../qualityValidator";
 import { aggregateScore, decide, buildSummary } from "../aggregator";
 import { pdfPreflight } from "../pdfGuard";
 import { detectLanguage } from "../languageDetector";
-import type { ValidationResult, IntentVerdict, ProgressEvent, PipelineStage, OcrResult, PreflightResult } from "../types";
+import type { ValidationResult, IntentVerdict, ProgressEvent, PipelineStage, OcrResult, PreflightResult, ExpandedIntent, DocumentType } from "../types";
 
 export type { ValidationResult };
 
@@ -95,6 +95,13 @@ export async function browserValidateUpload(
     emit("page-classification", `Detected language: ${langResult.displayName} — OCR will use ${langResult.tesseractLang} mode.`, 26);
   } else if (!langResult.confident && ocrPages.length > 0) {
     emit("page-classification", "Language unclear — defaulting to English OCR. If results look wrong, the document may be in another language.", 26);
+  }
+
+  // ── Phase 2.3: Document type detection ────────────────────────────────
+  const allExtractedText = pages.map((p) => p.extractedText).join(" ");
+  const docType: DocumentType = detectDocumentType(allExtractedText);
+  if (docType !== "prose") {
+    emit("page-classification", `Document type detected: ${docType} — quality rubric adjusted.`, 27);
   }
 
   // ── Step 2: OCR flagged pages ───────────────────────────────────────────────
@@ -183,10 +190,31 @@ export async function browserValidateUpload(
   emit("sampling", `Selected ${sample.length} chunks for validation.`, 58);
 
   // ── Step 5: Intent check ────────────────────────────────────────────────────
-  emit("intent-check", "Checking intent match (local embeddings)…", 62);
+  // Phase 2.1: Vagueness check (free, deterministic)
+  const vagueness = checkIntentVagueness(userIntent);
+  if (vagueness.vague) {
+    emit("intent-check", `Intent may be too vague (${vagueness.reason}). Suggestion: ${vagueness.suggestion}`, 61);
+  }
+
+  // Phase 2.2: Intent expansion (one LLM call — gives refined_query + document_keywords)
+  let expandedIntent: ExpandedIntent | null = null;
+  let queryForEmbedding = userIntent;
+  if (apiKey) {
+    emit("intent-check", "Expanding intent for better matching…", 62);
+    expandedIntent = await expandIntent(userIntent, apiKey);
+    if (expandedIntent) {
+      queryForEmbedding = expandedIntent.refined_query;
+      emit("intent-check",
+        `Intent understood — Domain: ${expandedIntent.domain} | Use case: ${expandedIntent.use_case}`,
+        63, `Keywords: ${expandedIntent.document_keywords.join(", ")}`
+      );
+    }
+  }
+
+  emit("intent-check", "Checking intent match (local embeddings)…", 64);
   const t3 = performance.now();
 
-  const { similarity, needsLLMCheck } = await checkIntentMatch(userIntent, combinedSampleText);
+  const { similarity, needsLLMCheck } = await checkIntentMatch(queryForEmbedding, combinedSampleText);
   let intentVerdict: IntentVerdict = similarityToVerdict(similarity);
   let intentReason = "";
 
@@ -221,7 +249,8 @@ export async function browserValidateUpload(
       apiKey,
       (done, total, score) => {
         emit("quality-scoring", `Scored ${done}/${total} (score: ${score})`, 72 + Math.round((done / total) * 18));
-      }
+      },
+      docType  // Phase 2.3: adjusted rubric based on document type
     );
   } else {
     // Heuristic scoring — no LLM
